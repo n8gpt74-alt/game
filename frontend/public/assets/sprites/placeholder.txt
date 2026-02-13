@@ -1,0 +1,14 @@
+Optional production assets for unicorn:
+- unicorn.json (Pixi spritesheet manifest)
+- unicorn.png (atlas referenced by unicorn.json)
+
+Expected animation keys in unicorn.json:
+- idle
+- feed
+- toilet
+- walk
+- heal
+- chat
+- transform
+
+If files are missing, the app auto-generates stylized pixel-art placeholder animations and FX.
