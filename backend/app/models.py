@@ -33,6 +33,25 @@ class PetState(Base):
 
     behavior_state: Mapped[str] = mapped_column(String(32), default="Спокойный", nullable=False)
 
+    # Character System - personality parameters (0-100)
+    character_courage: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    character_friendliness: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    character_energy: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    character_curiosity: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    character_tidiness: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+
+    # Mood System
+    current_mood: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
+    last_mood_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    # Age System
+    birth_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    age_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Events System
+    last_event_check: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    event_history: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     last_tick_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

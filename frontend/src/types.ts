@@ -1,6 +1,6 @@
 export type СтадияПитомца = "baby" | "child" | "teen" | "adult";
 
-export type ТипДействия = "feed" | "wash" | "play" | "heal" | "chat";
+export type ТипДействия = "feed" | "wash" | "play" | "heal" | "chat" | "sleep" | "clean";
 
 export type СостояниеAI =
   | "Спокойный"

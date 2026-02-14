@@ -9,10 +9,13 @@ import {
   получитьСостояние,
   открытьСундукДня,
   отправитьРезультатМиниИгры,
-  купитьТовар
+  купитьТовар,
+  использоватьПредмет
 } from "./api";
 import { ActionDock } from "./components/ActionDock";
 import { FxOverlay, type FxName, type FxTrigger } from "./components/FxOverlay";
+import { ItemAnimation } from "./components/ItemAnimation";
+import { ItemSelector } from "./components/ItemSelector";
 import { TopStats } from "./components/TopStats";
 import { Unicorn3D, type Unicorn3DHandle, type ВозрастМиниИгры } from "./components/Unicorn3D";
 import { применитьСостояниеСервера, проверитьПовышениеУровня, выполнитьДействие } from "./game/контроллер";
@@ -168,11 +171,17 @@ export default function App() {
   const [inventory, setInventory] = useState<ПредметИнвентаря[]>(initialSnapshot?.inventory ?? []);
   const [equippedItems, setEquippedItems] = useState<string[]>(() => загрузитьЭкипировку());
   const [isOffline, setIsOffline] = useState<boolean>(!window.navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [isSleeping, setIsSleeping] = useState(false);
+  const [needsClean, setNeedsClean] = useState(false);
   const [activeAction, setActiveAction] = useState<ТипДействия | null>(null);
   const [fxTrigger, setFxTrigger] = useState<FxTrigger | null>(null);
   const [showMiniGamePicker, setShowMiniGamePicker] = useState(false);
   const [showMathMiniGames, setShowMathMiniGames] = useState(false);
+  const [showItemSelector, setShowItemSelector] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<ТипДействия | null>(null);
+  const [animatingItems, setAnimatingItems] = useState<Array<{ id: number; itemKey: string }>>([]);
   const [panel, setPanel] = useState<Панель>("нет");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -241,7 +250,18 @@ export default function App() {
 
   useEffect(() => {
     if (initialSnapshot?.state) {
-      показатьТост("Загружен локальный прогресс");
+      const savedDate = new Date(initialSnapshot.savedAt);
+      const now = new Date();
+      const minutesAgo = Math.floor((now.getTime() - savedDate.getTime()) / 60000);
+      
+      if (minutesAgo < 1) {
+        показатьТост("Добро пожаловать! Прогресс загружен");
+      } else if (minutesAgo < 60) {
+        показатьТост(`Прогресс загружен (${minutesAgo} мин назад)`);
+      } else {
+        const hoursAgo = Math.floor(minutesAgo / 60);
+        показатьТост(`Прогресс загружен (${hoursAgo}ч назад)`);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -250,6 +270,13 @@ export default function App() {
     const timer = window.setInterval(() => setCooldownNowMs(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    // Отслеживаем когда hunger достигает 100%
+    if (state && state.hunger >= 100) {
+      setNeedsClean(true);
+    }
+  }, [state]);
 
   useEffect(() => {
     let active = true;
@@ -303,6 +330,7 @@ export default function App() {
     let active = true;
 
     const load = async () => {
+      setIsSyncing(true);
       try {
         const [stateData, historyData, dailyData, catalogData, inventoryData] = await Promise.all([
           получитьСостояние(token),
@@ -312,17 +340,28 @@ export default function App() {
           получитьИнвентарь(token)
         ]);
         if (!active) return;
-        setState(применитьСостояниеСервера(stateData));
+        
+        // Применяем серверные данные
+        const serverState = применитьСостояниеСервера(stateData);
+        setState(serverState);
         setHistory(historyData.slice(0, 20));
         setDaily(dailyData);
         setCatalog(catalogData);
         setInventory(inventoryData);
-        setIsOffline(!window.navigator.onLine);
+        setIsOffline(false);
+        setIsSyncing(false);
+        
+        // Показываем уведомление о синхронизации только при первой загрузке
+        if (initialSnapshot?.state) {
+          показатьТост("✓ Прогресс синхронизирован");
+        }
       } catch (err) {
+        setIsSyncing(false);
         if (active) {
           setError(parseError(err));
           if (!window.navigator.onLine) {
             setIsOffline(true);
+            показатьТост("⚠ Работаем из сохранённых данных");
           }
         }
       }
@@ -341,7 +380,7 @@ export default function App() {
       window.clearInterval(timer);
       reloadRef.current = null;
     };
-  }, [token]);
+  }, [token, initialSnapshot?.state]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -398,12 +437,146 @@ export default function App() {
     };
   }, [token]);
 
+  const handleSleep = async () => {
+    if (!token || busy || isSleeping) return;
+    
+    const currentEnergy = stateRef.current?.energy ?? 0;
+    if (currentEnergy >= 95) {
+      показатьТост("Энергия уже полная! Не нужно спать");
+      return;
+    }
+    
+    setIsSleeping(true);
+    setBusy(true);
+    проигратьЗвук("действие");
+    показатьТост("💤 Засыпаем...");
+    
+    // Анимация засыпания
+    if (unicornRef.current) {
+      await unicornRef.current.playAction("chat");
+    }
+    
+    // Постепенное восстановление энергии
+    const sleepInterval = setInterval(async () => {
+      const current = stateRef.current;
+      
+      // Проверяем, достигли ли 100% энергии
+      if (!current || current.energy >= 100) {
+        clearInterval(sleepInterval);
+        
+        // Пробуждение - отправляем действие "sleep" на сервер для получения награды
+        try {
+          const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "/api";
+          const response = await fetch(`${apiBase.replace(/\/+$/, "")}/action/sleep`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            const normalized = применитьСостояниеСервера(result.state);
+            setState(normalized);
+            setHistory((old) => [result.event, ...old].slice(0, 20));
+            setDaily(result.daily);
+            
+            // Показываем награду
+            const coins = result.reward?.coins || 0;
+            const xp = result.reward?.xp || 0;
+            показатьТост(`✨ Проснулись! +${coins} монет, +${xp} XP`);
+            проигратьЗвук("успех");
+            pushFx("sparkles");
+          } else {
+            console.error("Sleep API error:", await response.text());
+            показатьТост("✨ Проснулись! Энергия восстановлена");
+          }
+        } catch (err) {
+          console.error("Sleep reward error:", err);
+          показатьТост("✨ Проснулись! Энергия восстановлена");
+        }
+        
+        setIsSleeping(false);
+        setBusy(false);
+        return;
+      }
+      
+      // Восстанавливаем энергию локально (+25 каждые 2 секунды)
+      setState(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          energy: Math.min(100, prev.energy + 25)
+        };
+      });
+    }, 2000);
+  };
+
+  const handleClean = async () => {
+    if (!token || busy) return;
+    
+    setBusy(true);
+    setNeedsClean(false);
+    проигратьЗвук("действие");
+    показатьТост("🧹 Убираем...");
+    
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "/api";
+      const response = await fetch(`${apiBase.replace(/\/+$/, "")}/action/clean`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        const normalized = применитьСостояниеСервера(result.state);
+        setState(normalized);
+        setHistory((old) => [result.event, ...old].slice(0, 20));
+        setDaily(result.daily);
+        
+        показатьТост("✨ Чисто! Сытость снизилась до 50%");
+        проигратьЗвук("успех");
+        pushFx("sparkles");
+      } else {
+        const errorText = await response.text();
+        показатьОшибку(parseError(new Error(errorText)));
+      }
+    } catch (err) {
+      показатьОшибку(parseError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleAction = async (action: ТипДействия) => {
     if (!token || busy) return;
     if (action === "wash" && washCooldownSec > 0) {
       показатьТост(`Мытьё доступно через ${washCooldownSec} сек`);
       return;
     }
+    
+    // Специальная обработка для сна
+    if (action === "sleep") {
+      await handleSleep();
+      return;
+    }
+    
+    // Для действий feed, wash, play, heal показываем селектор предметов
+    if (["feed", "wash", "play", "heal"].includes(action)) {
+      setSelectedAction(action);
+      setShowItemSelector(true);
+      return;
+    }
+    
+    // Для остальных действий (chat) выполняем напрямую
+    await executeActionDirect(action);
+  };
+  
+  const executeActionDirect = async (action: ТипДействия) => {
     setBusy(true);
     setActiveAction(action);
     setError("");
@@ -450,6 +623,104 @@ export default function App() {
     } finally {
       setActiveAction(null);
       setBusy(false);
+    }
+  };
+  
+  const handleUseItem = async (itemKey: string) => {
+    if (!token || busy) return;
+    
+    // Сохраняем действие локально, чтобы не потерять при следующем вызове
+    const currentAction = selectedAction;
+    
+    setShowItemSelector(false);
+    
+    // Блокируем интерфейс только на время сетевого запроса
+    setBusy(true);
+    setActiveAction(currentAction);
+    setError("");
+    
+    // Сразу запускаем анимацию дракончика
+    if (currentAction) {
+      unicornRef.current?.playAction(currentAction);
+    }
+    
+    // Показываем анимацию предмета с уникальным ID
+    const animationId = Date.now() + Math.random();
+    setAnimatingItems(prev => [...prev, { id: animationId, itemKey }]);
+    
+    // Убираем анимацию через 1.2 секунды
+    setTimeout(() => {
+      setAnimatingItems(prev => prev.filter(item => item.id !== animationId));
+    }, 1200);
+    
+    // Звук в зависимости от типа предмета
+    if (itemKey.startsWith("food_")) {
+      проигратьЗвук("действие");
+    } else if (itemKey.startsWith("medicine_")) {
+      проигратьЗвук("успех");
+    } else if (itemKey.startsWith("wash_")) {
+      проигратьЗвук("действие");
+    } else if (itemKey.startsWith("toy_")) {
+      проигратьЗвук("нажатие");
+    }
+    
+    try {
+      const prev = stateRef.current;
+      const result = await использоватьПредмет(token, itemKey);
+      
+      const normalized = применитьСостояниеСервера(result.state);
+      const рост = проверитьПовышениеУровня(prev, normalized);
+      
+      setState(normalized);
+      setHistory((old) => [result.event, ...old].slice(0, 20));
+      setDaily(result.daily);
+      
+      // Обновляем инвентарь
+      const inventoryData = await получитьИнвентарь(token);
+      setInventory(inventoryData);
+      
+      // Эффекты в зависимости от действия
+      if (currentAction === "feed") {
+        playFx("sparkles", pushFx);
+      } else if (currentAction === "wash") {
+        playFx("splash", pushFx);
+      } else if (currentAction === "play") {
+        playFx("hearts", pushFx);
+      } else if (currentAction === "heal") {
+        playFx("hornGlow", pushFx);
+      }
+      
+      проигратьЗвук("успех");
+      
+      for (const text of result.notifications) {
+        показатьТост(text);
+      }
+      if (рост.естьПовышение) {
+        pushFx("flash");
+        показатьТост(`Новый уровень! ${normalized.level}`);
+        проигратьЗвук("успех");
+      }
+      if (result.reward.unlocks.length > 0) {
+        показатьТост(`Разблокировано: ${result.reward.unlocks.join(", ")}`);
+      }
+      if (рост.новаяСтадия) {
+        проигратьЗвук("эволюция");
+        await unicornRef.current?.evolveTo(normalized.stage);
+      }
+      if (currentAction === "wash") {
+        const next = Date.now() + ACTION_COOLDOWN_MS.wash;
+        setCooldowns((prevCooldowns) => ({ ...prevCooldowns, washUntil: next }));
+      }
+      
+      // Разблокируем интерфейс
+      setBusy(false);
+      setActiveAction(null);
+      setSelectedAction(null);
+    } catch (err) {
+      setError(parseError(err));
+      setBusy(false);
+      setActiveAction(null);
+      setSelectedAction(null);
     }
   };
 
@@ -648,7 +919,8 @@ export default function App() {
             <strong>{PET_TITLE}</strong>
             <span>
               {stageLabel(state?.stage_title)}
-              {isOffline ? " • офлайн" : ""}
+              {isOffline && " • офлайн"}
+              {isSyncing && " • синхронизация..."}
             </span>
           </div>
 
@@ -703,6 +975,42 @@ export default function App() {
             roomTheme={activeRoomTheme}
           />
           <FxOverlay trigger={fxTrigger} />
+          {animatingItems.map(item => (
+            <ItemAnimation
+              key={item.id}
+              itemKey={item.itemKey}
+              onComplete={() => {
+                // Callback больше не нужен, таймер сам уберёт
+              }}
+            />
+          ))}
+          {needsClean && (
+            <div className="poop-overlay">
+              <div className="poop-icon">💩</div>
+              <button 
+                className="clean-button"
+                onClick={handleClean}
+                disabled={busy}
+              >
+                🧹 Убрать
+              </button>
+            </div>
+          )}
+          {isSleeping && (
+            <div className="sleep-overlay">
+              <div className="sleep-zzz">
+                <span>Z</span>
+                <span>z</span>
+                <span>z</span>
+              </div>
+              <div className="sleep-stars">
+                <span>✨</span>
+                <span>⭐</span>
+                <span>💫</span>
+              </div>
+              <div className="sleep-text">Сплю... Энергия: {state?.energy ?? 0}%</div>
+            </div>
+          )}
           {warning && <div className="low-stat-warning">{warning}</div>}
         </section>
 
@@ -837,6 +1145,18 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {showItemSelector && selectedAction && (
+        <ItemSelector
+          action={selectedAction}
+          inventory={inventory}
+          onSelect={handleUseItem}
+          onCancel={() => {
+            setShowItemSelector(false);
+            setSelectedAction(null);
+          }}
+        />
       )}
 
       {error && <div className="toast error">{error}</div>}

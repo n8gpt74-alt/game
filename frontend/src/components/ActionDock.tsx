@@ -8,9 +8,10 @@ type ActionDockAction = {
 
 const ACTIONS: ActionDockAction[] = [
   { id: "feed", label: "Кормить", icon: "🍎" },
-  { id: "wash", label: "Мыть", icon: "🫧" },
+  { id: "wash", label: "Мыть", icon: "🚿" },
   { id: "play", label: "Играть", icon: "🎮" },
-  { id: "heal", label: "Лечить", icon: "✨" }
+  { id: "heal", label: "Лечить", icon: "✨" },
+  { id: "sleep", label: "Спать", icon: "😴" }
 ];
 
 type Props = {

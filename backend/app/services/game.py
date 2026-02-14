@@ -30,6 +30,8 @@ ACTION_REWARDS: dict[str, dict[str, int]] = {
     "play": {"xp": 10, "coins": 5, "intelligence": 0, "crystals": 0},
     "heal": {"xp": 7, "coins": 3, "intelligence": 0, "crystals": 0},
     "chat": {"xp": 4, "coins": 1, "intelligence": 0, "crystals": 0},
+    "sleep": {"xp": 10, "coins": 100, "intelligence": 0, "crystals": 0},  # Большая награда за полноценный сон
+    "clean": {"xp": 3, "coins": 5, "intelligence": 0, "crystals": 0},  # Награда за уборку
 }
 
 TASK_BY_ACTION = {
@@ -96,13 +98,18 @@ def ensure_pet_state(db: Session, user_id: int) -> PetState:
         stage="baby",
         level=1,
         xp=0,
-        coins=35,
+        coins=1000,  # Много монет для тестирования
         intelligence=0,
         crystals=0,
         behavior_state="Спокойный",
     )
     db.add(pet)
-    db.add(Inventory(user_id=user_id, item_key="корм_базовый", quantity=8))
+    # Стартовые предметы - базовый набор для начала игры
+    db.add(Inventory(user_id=user_id, item_key="food_apple", quantity=8))
+    db.add(Inventory(user_id=user_id, item_key="food_carrot", quantity=5))
+    db.add(Inventory(user_id=user_id, item_key="wash_soap", quantity=5))
+    db.add(Inventory(user_id=user_id, item_key="medicine_bandage", quantity=3))
+    db.add(Inventory(user_id=user_id, item_key="toy_ball", quantity=3))
     db.add(NotificationSettings(user_id=user_id))
     db.commit()
     db.refresh(pet)
@@ -262,6 +269,11 @@ def execute_action(db: Session, pet: PetState, action: str) -> ActionExecution:
     apply_time_decay(pet, now=now, cap_seconds=settings.decay_cap_seconds, lonely=lonely)
 
     result: ActionResult = apply_action(pet, action)
+    
+    # Специальная логика для уборки какашек
+    if action == "clean":
+        pet.hunger = 50  # Снижаем сытость до 50%
+    
     action_reward = ACTION_REWARDS[action]
     reward = _apply_progress_for_pet(
         db,
@@ -493,3 +505,105 @@ def buy_shop_item(db: Session, pet: PetState, item_key: str) -> ShopExecution:
         {"item_key": item.item_key, "title": item.title, "section": item.section, "price": price},
     )
     return ShopExecution(pet=pet, event=event, item_key=item.item_key, price=price)
+
+
+
+def use_item(db: Session, pet: PetState, item_key: str) -> ActionExecution:
+    """Использовать предмет из инвентаря"""
+    from app.services.shop import get_item_category, get_item_effects, is_consumable, find_item
+    
+    # Проверяем, что предмет расходный
+    if not is_consumable(item_key):
+        raise ValueError("Этот предмет нельзя использовать")
+    
+    # Проверяем наличие в инвентаре
+    inventory_item = db.execute(
+        select(Inventory).where(Inventory.user_id == pet.user_id, Inventory.item_key == item_key)
+    ).scalar_one_or_none()
+    
+    if not inventory_item or inventory_item.quantity <= 0:
+        raise ValueError("У вас нет этого предмета")
+    
+    # Применяем деградацию
+    now = _now()
+    lonely = is_absent_more_than_24h(pet.last_active_at, now)
+    apply_time_decay(pet, now=now, cap_seconds=settings.decay_cap_seconds, lonely=lonely)
+    
+    # Получаем эффекты предмета
+    effects = get_item_effects(item_key)
+    deltas: dict[str, int] = {}
+    
+    # Применяем эффекты
+    for stat, delta in effects.items():
+        if stat == "intelligence":
+            # Интеллект не ограничен 100
+            pet.intelligence += delta
+            deltas[stat] = delta
+        else:
+            before = getattr(pet, stat)
+            after = _clamp_stat(before + delta)
+            setattr(pet, stat, after)
+            deltas[stat] = after - before
+    
+    # Уменьшаем количество предмета
+    inventory_item.quantity -= 1
+    if inventory_item.quantity <= 0:
+        db.delete(inventory_item)
+    
+    # Определяем награды в зависимости от категории
+    category = get_item_category(item_key)
+    if category == "food":
+        base_xp, base_coins = 5, 2
+    elif category == "medicine":
+        base_xp, base_coins = 7, 3
+    elif category == "wash":
+        base_xp, base_coins = 5, 2
+    elif category == "toy":
+        base_xp, base_coins = 10, 5
+    else:
+        base_xp, base_coins = 3, 1
+    
+    # Применяем прогресс
+    reward = _apply_progress_for_pet(
+        db,
+        pet,
+        base_xp=base_xp,
+        base_coins=base_coins,
+        base_intelligence=effects.get("intelligence", 0),
+    )
+    
+    pet.last_active_at = now
+    _update_behavior_state(pet)
+    
+    # Обновляем ежедневные задания
+    daily_payload, notifications = _update_daily_progress_for_action(db, pet, category)
+    
+    if reward.level_up:
+        notifications.append("Новый уровень!")
+    if lonely:
+        notifications.append("Питомец скучает")
+    
+    # Получаем название предмета
+    shop_item = find_item(item_key)
+    item_title = shop_item.title if shop_item else item_key
+    notifications.insert(0, f"Использован: {item_title}")
+    
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+    
+    event = _record_event(
+        db,
+        pet.user_id,
+        f"use_item_{category}",
+        {
+            "item_key": item_key,
+            "item_title": item_title,
+            "deltas": deltas,
+            "reward": reward.__dict__,
+            "daily": daily_payload,
+            "notifications": notifications,
+            "stats": serialize_pet_state_for_event(pet),
+        },
+    )
+    return ActionExecution(pet=pet, event=event, reward=reward, notifications=notifications)

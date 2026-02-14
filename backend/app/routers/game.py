@@ -34,6 +34,7 @@ from app.services.game import (
     get_shop_catalog,
     run_decay,
     serialize_pet_state,
+    use_item,
 )
 
 
@@ -125,6 +126,16 @@ def action_heal(db: DbDep, user_id: UserDep) -> ActionResponse:
 @router.post("/action/chat", response_model=ActionResponse)
 def action_chat(db: DbDep, user_id: UserDep) -> ActionResponse:
     return _run_action("chat", db, user_id)
+
+
+@router.post("/action/sleep", response_model=ActionResponse)
+def action_sleep(db: DbDep, user_id: UserDep) -> ActionResponse:
+    return _run_action("sleep", db, user_id)
+
+
+@router.post("/action/clean", response_model=ActionResponse)
+def action_clean(db: DbDep, user_id: UserDep) -> ActionResponse:
+    return _run_action("clean", db, user_id)
 
 
 @router.post("/minigames/result", response_model=MinigameResultResponse)
@@ -240,3 +251,27 @@ def history(db: DbDep, user_id: UserDep, limit: int = Query(default=30, ge=1, le
 def inventory(db: DbDep, user_id: UserDep) -> list[InventoryOut]:
     rows = get_inventory(db, user_id)
     return [InventoryOut(item_key=row.item_key, quantity=row.quantity) for row in rows]
+
+
+@router.post("/use-item", response_model=ActionResponse)
+def use_item_endpoint(payload: ShopBuyRequest, db: DbDep, user_id: UserDep) -> ActionResponse:
+    """Использовать предмет из инвентаря"""
+    pet = ensure_pet_state(db, user_id)
+    try:
+        result = use_item(db, pet, payload.item_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+    return ActionResponse(
+        state=PetStateOut(**serialize_pet_state(result.pet)),
+        event=EventLogOut(
+            id=result.event.id,
+            action=result.event.action,
+            payload=result.event.payload,
+            created_at=result.event.created_at,
+        ),
+        reward=_to_reward_out(result.reward),
+        daily=_to_daily_out(get_daily_state(db, user_id)),
+        notifications=result.notifications,
+    )
+

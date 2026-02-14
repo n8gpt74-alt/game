@@ -63,14 +63,48 @@ function ценаМагазина(basePrice: number, level: number): number {
 }
 
 const SHOP_BASE: Array<Omit<ТоварМагазина, "price" | "owned">> = [
-  { item_key: "decor_star_halo", title: "Звёздный венок", section: "Украшения", base_price: 35, level_required: 1 },
-  { item_key: "decor_moon_tiara", title: "Лунная тиара", section: "Украшения", base_price: 65, level_required: 4 },
-  { item_key: "horn_glow_amber", title: "Янтарное сияние", section: "Эффекты рога", base_price: 50, level_required: 3 },
-  { item_key: "horn_glow_aurora", title: "Аврора-свечение", section: "Эффекты рога", base_price: 90, level_required: 7 },
-  { item_key: "theme_spring_room", title: "Весенняя комната", section: "Темы комнаты", base_price: 70, level_required: 5 },
-  { item_key: "theme_crystal_room", title: "Кристальная комната", section: "Темы комнаты", base_price: 120, level_required: 10 },
-  { item_key: "acc_scarf_sky", title: "Небесный шарф", section: "Аксессуары", base_price: 45, level_required: 2 },
-  { item_key: "acc_boots_cloud", title: "Облачные ботинки", section: "Аксессуары", base_price: 80, level_required: 8 }
+  // Еда
+  { item_key: "food_apple", title: "🍎 Яблоко", section: "Еда", base_price: 5, level_required: 1 },
+  { item_key: "food_carrot", title: "🥕 Морковь", section: "Еда", base_price: 8, level_required: 1 },
+  { item_key: "food_candy", title: "🍬 Конфеты", section: "Еда", base_price: 10, level_required: 1 },
+  { item_key: "food_icecream", title: "🍦 Мороженое", section: "Еда", base_price: 12, level_required: 2 },
+  { item_key: "food_cake", title: "🍰 Торт", section: "Еда", base_price: 15, level_required: 2 },
+  { item_key: "food_pizza", title: "🍕 Пицца", section: "Еда", base_price: 20, level_required: 3 },
+  { item_key: "food_steak", title: "🥩 Стейк", section: "Еда", base_price: 30, level_required: 5 },
+  { item_key: "food_sushi", title: "🍣 Суши", section: "Еда", base_price: 40, level_required: 7 },
+  
+  // Лекарства
+  { item_key: "medicine_bandage", title: "🩹 Бинт", section: "Лекарства", base_price: 10, level_required: 1 },
+  { item_key: "medicine_syringe", title: "💉 Укол", section: "Лекарства", base_price: 18, level_required: 2 },
+  { item_key: "medicine_potion", title: "🧪 Зелье", section: "Лекарства", base_price: 25, level_required: 2 },
+  { item_key: "medicine_elixir", title: "⚗️ Эликсир", section: "Лекарства", base_price: 50, level_required: 5 },
+  
+  // Средства для мытья
+  { item_key: "wash_soap", title: "🧼 Мыло", section: "Гигиена", base_price: 8, level_required: 1 },
+  { item_key: "wash_sponge", title: "🧽 Мочалка", section: "Гигиена", base_price: 10, level_required: 1 },
+  { item_key: "wash_toothbrush", title: "🪥 Зубная щётка", section: "Гигиена", base_price: 12, level_required: 1 },
+  { item_key: "wash_shampoo", title: "🧴 Шампунь", section: "Гигиена", base_price: 15, level_required: 2 },
+  { item_key: "wash_spa", title: "🛁 СПА-набор", section: "Гигиена", base_price: 35, level_required: 4 },
+  
+  // Игрушки
+  { item_key: "toy_ball", title: "⚽ Мяч", section: "Игрушки", base_price: 12, level_required: 1 },
+  { item_key: "toy_frisbee", title: "🥏 Фрисби", section: "Игрушки", base_price: 18, level_required: 2 },
+  { item_key: "toy_puzzle", title: "🧩 Головоломка", section: "Игрушки", base_price: 25, level_required: 3 },
+  { item_key: "toy_guitar", title: "🎸 Гитара", section: "Игрушки", base_price: 30, level_required: 3 },
+  { item_key: "toy_accordion", title: "🪗 Гармонь", section: "Игрушки", base_price: 35, level_required: 4 },
+  { item_key: "toy_saxophone", title: "🎷 Саксофон", section: "Игрушки", base_price: 40, level_required: 5 },
+  { item_key: "toy_drum", title: "🥁 Барабан", section: "Игрушки", base_price: 28, level_required: 3 },
+  { item_key: "toy_bicycle", title: "🚲 Велосипед", section: "Игрушки", base_price: 50, level_required: 6 },
+  
+  // Украшения
+  { item_key: "decor_star_halo", title: "⭐ Звёздный венок", section: "Украшения", base_price: 35, level_required: 1 },
+  { item_key: "decor_moon_tiara", title: "🌙 Лунная тиара", section: "Украшения", base_price: 65, level_required: 4 },
+  { item_key: "horn_glow_amber", title: "✨ Янтарное сияние", section: "Эффекты рога", base_price: 50, level_required: 3 },
+  { item_key: "horn_glow_aurora", title: "🌈 Аврора-свечение", section: "Эффекты рога", base_price: 90, level_required: 7 },
+  { item_key: "theme_spring_room", title: "🌸 Весенняя комната", section: "Темы комнаты", base_price: 70, level_required: 5 },
+  { item_key: "theme_crystal_room", title: "💎 Кристальная комната", section: "Темы комнаты", base_price: 120, level_required: 10 },
+  { item_key: "acc_scarf_sky", title: "🧣 Небесный шарф", section: "Аксессуары", base_price: 45, level_required: 2 },
+  { item_key: "acc_boots_cloud", title: "👢 Облачные ботинки", section: "Аксессуары", base_price: 80, level_required: 8 }
 ];
 
 const DEFAULT_DAILY_TASKS = [
@@ -96,7 +130,7 @@ function создатьЛокальныйState(): СостояниеПитомц
     level: 1,
     xp: 0,
     xp_to_next_level: опытДоСледующегоУровня(1),
-    coins: 35,
+    coins: 1000,
     intelligence: 0,
     crystals: 0,
     hunger: 82,
@@ -119,7 +153,13 @@ const localStore: ЛокальноеХранилище = {
     chest_claimed: false,
     all_completed: false
   },
-  inventory: [{ item_key: "корм_базовый", quantity: 8 }],
+  inventory: [
+    { item_key: "food_apple", quantity: 8 },
+    { item_key: "food_carrot", quantity: 5 },
+    { item_key: "wash_soap", quantity: 5 },
+    { item_key: "medicine_bandage", quantity: 3 },
+    { item_key: "toy_ball", quantity: 3 }
+  ],
   nextEventId: 1
 };
 
@@ -225,6 +265,10 @@ function applyActionStats(action: ТипДействия): void {
     pet.health = clamp(pet.health + 24);
     pet.happiness = clamp(pet.happiness + 4);
     pet.energy = clamp(pet.energy - 2);
+  } else if (action === "clean") {
+    pet.hygiene = clamp(pet.hygiene + 15);
+    pet.happiness = clamp(pet.happiness + 5);
+    pet.hunger = 50;  // Снижаем сытость до 50%
   } else {
     pet.happiness = clamp(pet.happiness + 10);
     pet.health = clamp(pet.health + 2);
@@ -245,7 +289,9 @@ function localAction(action: ТипДействия): ОтветДействия
         ? gainProgress(10, 5)
         : action === "heal"
           ? gainProgress(7, 3)
-          : gainProgress(4, 1);
+          : action === "clean"
+            ? gainProgress(3, 5)
+            : gainProgress(4, 1);
 
   const notifications: string[] = [];
   if (localStore.state.hunger < 30) notifications.push("Дракончик Искра проголодался");
@@ -491,4 +537,9 @@ export function купитьТовар(token: string, itemKey: string): Promise<
 
 export function получитьИнвентарь(token: string): Promise<ПредметИнвентаря[]> {
   return request<ПредметИнвентаря[]>("/inventory", token);
+}
+
+
+export function использоватьПредмет(token: string, itemKey: string): Promise<ОтветДействия> {
+  return request<ОтветДействия>("/use-item", token, "POST", { item_key: itemKey });
 }
