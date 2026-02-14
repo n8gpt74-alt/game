@@ -4,6 +4,8 @@ import {
   CanvasTexture,
   Clock,
   Color,
+  ConeGeometry,
+  CylinderGeometry,
   DirectionalLight,
   Group,
   HemisphereLight,
@@ -31,6 +33,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { СтадияПитомца, ТипДействия } from "../types";
 import { createParticlesSystem, type ParticleSystem } from "./particlesSystem";
+import { visualEffects } from "../effects";
 
 type ActionConfig = { durationMs: number };
 export type ВозрастМиниИгры = "2-4" | "5-6" | "7-8";
@@ -72,7 +75,9 @@ const ACTION_CONFIG: Record<ТипДействия, ActionConfig> = {
   wash: { durationMs: 1000 },
   play: { durationMs: 1200 },
   heal: { durationMs: 1100 },
-  chat: { durationMs: 850 }
+  chat: { durationMs: 850 },
+  sleep: { durationMs: 1500 },
+  clean: { durationMs: 950 }
 };
 
 const CONFIG = {
@@ -188,6 +193,253 @@ function createBlinkTexture(): CanvasTexture {
   return texture;
 }
 
+// Создание простого дерева
+// Создание реалистичного дерева
+function createTree(x: number, z: number, scale: number): Group {
+  const tree = new Group();
+  
+  // Вариация цветов для естественности
+  const trunkColorVariation = Math.random() * 0.1;
+  const foliageColorVariation = Math.random() * 0.15;
+  
+  // Ствол с текстурой коры
+  const trunkGeometry = new CylinderGeometry(
+    0.08 * scale, 
+    0.14 * scale, 
+    0.9 * scale, 
+    12
+  );
+  const trunkMaterial = new MeshStandardMaterial({ 
+    color: new Color(0.29 + trunkColorVariation, 0.22 + trunkColorVariation, 0.16),
+    roughness: 0.95,
+    metalness: 0
+  });
+  const trunk = new Mesh(trunkGeometry, trunkMaterial);
+  trunk.position.y = 0.45 * scale;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  tree.add(trunk);
+  
+  // Крона - более пышная и реалистичная (4 уровня)
+  const baseFoliageColor = new Color(0.18 + foliageColorVariation, 0.31 + foliageColorVariation, 0.09);
+  
+  // Нижний уровень кроны - самый широкий
+  const foliage1Material = new MeshStandardMaterial({ 
+    color: baseFoliageColor.clone().multiplyScalar(0.85),
+    roughness: 0.85,
+    metalness: 0
+  });
+  const foliage1 = new Mesh(
+    new ConeGeometry(0.45 * scale, 0.65 * scale, 10), 
+    foliage1Material
+  );
+  foliage1.position.y = 1.05 * scale;
+  foliage1.castShadow = true;
+  foliage1.rotation.y = Math.random() * Math.PI;
+  tree.add(foliage1);
+  
+  // Второй уровень
+  const foliage2Material = new MeshStandardMaterial({ 
+    color: baseFoliageColor.clone(),
+    roughness: 0.8,
+    metalness: 0
+  });
+  const foliage2 = new Mesh(
+    new ConeGeometry(0.38 * scale, 0.55 * scale, 10), 
+    foliage2Material
+  );
+  foliage2.position.y = 1.45 * scale;
+  foliage2.castShadow = true;
+  foliage2.rotation.y = Math.random() * Math.PI;
+  tree.add(foliage2);
+  
+  // Третий уровень
+  const foliage3Material = new MeshStandardMaterial({ 
+    color: baseFoliageColor.clone().multiplyScalar(1.1),
+    roughness: 0.75,
+    metalness: 0
+  });
+  const foliage3 = new Mesh(
+    new ConeGeometry(0.28 * scale, 0.45 * scale, 10), 
+    foliage3Material
+  );
+  foliage3.position.y = 1.8 * scale;
+  foliage3.castShadow = true;
+  foliage3.rotation.y = Math.random() * Math.PI;
+  tree.add(foliage3);
+  
+  // Верхушка - острая
+  const foliage4Material = new MeshStandardMaterial({ 
+    color: baseFoliageColor.clone().multiplyScalar(1.15),
+    roughness: 0.7,
+    metalness: 0
+  });
+  const foliage4 = new Mesh(
+    new ConeGeometry(0.18 * scale, 0.35 * scale, 8), 
+    foliage4Material
+  );
+  foliage4.position.y = 2.1 * scale;
+  foliage4.castShadow = true;
+  tree.add(foliage4);
+  
+  // Небольшой наклон для естественности
+  tree.rotation.z = (Math.random() - 0.5) * 0.08;
+  tree.position.set(x, 0, z);
+  return tree;
+}
+
+// Создание реалистичного куста травы
+function createGrassPatch(x: number, z: number): Group {
+  const patch = new Group();
+  
+  // Вариация цвета травы
+  const grassColorVariation = Math.random() * 0.1;
+  const grassColor = new Color(0.29 + grassColorVariation, 0.49 + grassColorVariation, 0.17);
+  
+  const grassMaterial = new MeshStandardMaterial({ 
+    color: grassColor,
+    roughness: 0.9,
+    metalness: 0,
+    side: 2 // DoubleSide
+  });
+  
+  // Больше травинок для пышности
+  const bladeCount = 8 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < bladeCount; i++) {
+    const height = 0.12 + Math.random() * 0.08;
+    const width = 0.04 + Math.random() * 0.02;
+    
+    const blade = new Mesh(
+      new PlaneGeometry(width, height),
+      grassMaterial
+    );
+    
+    blade.position.set(
+      (Math.random() - 0.5) * 0.15,
+      height / 2,
+      (Math.random() - 0.5) * 0.15
+    );
+    blade.rotation.y = Math.random() * Math.PI * 2;
+    blade.rotation.x = (Math.random() - 0.5) * 0.3;
+    blade.rotation.z = (Math.random() - 0.5) * 0.2;
+    patch.add(blade);
+  }
+  
+  patch.position.set(x, 0.001, z);
+  return patch;
+}
+
+// Создание цветка
+function createFlower(x: number, z: number): Group {
+  const flower = new Group();
+  
+  // Стебель
+  const stemGeometry = new CylinderGeometry(0.01, 0.015, 0.15, 6);
+  const stemMaterial = new MeshStandardMaterial({ 
+    color: 0x2d5016,
+    roughness: 0.8
+  });
+  const stem = new Mesh(stemGeometry, stemMaterial);
+  stem.position.y = 0.075;
+  flower.add(stem);
+  
+  // Цветок (случайный цвет)
+  const flowerColors = [0xff6b9d, 0xffd93d, 0x6bcfff, 0xff9b85, 0xc77dff];
+  const flowerColor = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+  
+  const petalGeometry = new SphereGeometry(0.04, 8, 8);
+  const petalMaterial = new MeshStandardMaterial({ 
+    color: flowerColor,
+    roughness: 0.6,
+    metalness: 0.1
+  });
+  
+  // 5 лепестков
+  for (let i = 0; i < 5; i++) {
+    const petal = new Mesh(petalGeometry, petalMaterial);
+    const angle = (i / 5) * Math.PI * 2;
+    petal.position.set(
+      Math.cos(angle) * 0.03,
+      0.15,
+      Math.sin(angle) * 0.03
+    );
+    petal.scale.set(0.8, 0.6, 0.8);
+    flower.add(petal);
+  }
+  
+  // Центр цветка
+  const center = new Mesh(
+    new SphereGeometry(0.02, 8, 8),
+    new MeshStandardMaterial({ color: 0xffd93d, roughness: 0.5 })
+  );
+  center.position.y = 0.15;
+  flower.add(center);
+  
+  flower.position.set(x, 0, z);
+  return flower;
+}
+
+// Создание лесной сцены
+function createForestEnvironment(scene: Scene): void {
+  const envGroup = new Group();
+  
+  // Деревья на заднем плане (дальше и меньше) - больше деревьев
+  const backTrees = [
+    { x: -2.8, z: -3.5, scale: 0.75 },
+    { x: -2.2, z: -4, scale: 0.7 },
+    { x: -1.2, z: -3.8, scale: 0.8 },
+    { x: -0.3, z: -4.2, scale: 0.65 },
+    { x: 0.8, z: -3.9, scale: 0.75 },
+    { x: 1.6, z: -3.5, scale: 0.7 },
+    { x: 2.4, z: -4, scale: 0.8 },
+    { x: 3, z: -3.6, scale: 0.7 }
+  ];
+  
+  backTrees.forEach(({ x, z, scale }) => {
+    const tree = createTree(x, z, scale);
+    envGroup.add(tree);
+  });
+  
+  // Деревья по бокам (ближе и крупнее)
+  const sideTrees = [
+    { x: -2.9, z: -1.2, scale: 1.3 },
+    { x: -2.6, z: 0.3, scale: 1.2 },
+    { x: -2.8, z: 1.5, scale: 1.1 },
+    { x: 2.6, z: -1, scale: 1.25 },
+    { x: 2.9, z: 0.6, scale: 1.15 },
+    { x: 2.7, z: 1.8, scale: 1.2 }
+  ];
+  
+  sideTrees.forEach(({ x, z, scale }) => {
+    const tree = createTree(x, z, scale);
+    envGroup.add(tree);
+  });
+  
+  // Трава на переднем плане - больше кустов
+  for (let i = 0; i < 30; i++) {
+    const x = (Math.random() - 0.5) * 5;
+    const z = (Math.random() - 0.5) * 4;
+    // Не размещаем траву в центре (где дракончик)
+    if (Math.abs(x) > 0.9 || Math.abs(z) > 0.9) {
+      const grass = createGrassPatch(x, z);
+      envGroup.add(grass);
+    }
+  }
+  
+  // Цветы для красоты
+  for (let i = 0; i < 12; i++) {
+    const x = (Math.random() - 0.5) * 4.5;
+    const z = (Math.random() - 0.5) * 3.5;
+    // Не размещаем цветы в центре
+    if (Math.abs(x) > 1 || Math.abs(z) > 1) {
+      const flower = createFlower(x, z);
+      envGroup.add(flower);
+    }
+  }
+  
+  scene.add(envGroup);
+}
+
 function createGradientBackgroundTexture(): CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 16;
@@ -198,9 +450,19 @@ function createGradientBackgroundTexture(): CanvasTexture {
   }
 
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, "#8FD3FF");
-  gradient.addColorStop(0.5, "#B9A8FF");
-  gradient.addColorStop(1, "#FFB6E6");
+  // Небо - более реалистичное
+  gradient.addColorStop(0, "#87CEEB");      // Небесно-голубой
+  gradient.addColorStop(0.25, "#B0E0E6");   // Светло-голубой (горизонт)
+  // Дальний лес (горы)
+  gradient.addColorStop(0.35, "#4A7C59");   // Серо-зелёный (дальние деревья)
+  gradient.addColorStop(0.45, "#2F5233");   // Тёмно-зелёный лес
+  // Ближний лес
+  gradient.addColorStop(0.55, "#1E3A20");   // Очень тёмный лес
+  gradient.addColorStop(0.65, "#2D5016");   // Переход к траве
+  // Трава - многослойная
+  gradient.addColorStop(0.75, "#4A7C2C");   // Средняя трава
+  gradient.addColorStop(0.85, "#5C8A3A");   // Светлая трава
+  gradient.addColorStop(1, "#6B9B47");      // Яркая трава на переднем плане
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -503,12 +765,19 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
     sceneRef.current = scene;
     const worldRoot = new Group();
     scene.add(worldRoot);
+    
+    // Добавляем лес и траву
+    createForestEnvironment(scene);
 
     const camera = new PerspectiveCamera(34, 1, CONFIG.camera.minNear, CONFIG.camera.minFar);
     camera.position.set(0, 1.0, CONFIG.camera.defaultZ);
     camera.lookAt(0, 0.6, 0);
     cameraRef.current = camera;
     clockRef.current = new Clock();
+
+    // Инициализация системы визуальных эффектов
+    visualEffects.initialize(scene, camera);
+    visualEffects.start();
 
     const hemi = new HemisphereLight(0xffffff, 0xd18fe0, CONFIG.lights.hemiIntensity);
     scene.add(hemi);
@@ -858,6 +1127,9 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
         const blink = blinkStateRef.current;
         const now = performance.now();
 
+        // Обновление визуальных эффектов
+        visualEffects.update(dt);
+
         const idleTarget = actionRunningRef.current ? 0.22 : 1;
         idleWeightRef.current = MathUtils.lerp(idleWeightRef.current, idleTarget, clamp(dt * 6, 0, 1));
         const idleFactor = idleWeightRef.current;
@@ -982,6 +1254,8 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
 
     return () => {
       disposed = true;
+      visualEffects.stop();
+      visualEffects.dispose();
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("scroll", onResize);
@@ -1024,46 +1298,117 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
     }
 
     actionRunningRef.current = true;
-    const duration = ACTION_CONFIG[actionName].durationMs;
-    const glowDuration =
-      actionName === "heal" ? 600 : actionName === "play" ? 520 : actionName === "wash" ? 450 : actionName === "feed" ? 360 : 300;
-    const glowPeak = actionName === "heal" ? CONFIG.actionGlow.maxIntensity : Math.min(0.48, CONFIG.actionGlow.maxIntensity);
-    glowPulseRef.current = { startAt: performance.now(), durationMs: glowDuration, peak: glowPeak };
+    const duration = ACTION_CONFIG[actionName]?.durationMs || 800;
+    
+    // Получаем позицию модели для эффектов
+    const effectPosition = new Vector3();
+    model.getWorldPosition(effectPosition);
+    effectPosition.y += 0.6; // Центр тела
+    
+    // Триггер визуальных эффектов
+    visualEffects.triggerActionEffect(actionName, effectPosition);
+    
+    // Настройки свечения для каждого действия
+    const glowSettings: Record<ТипДействия, { duration: number; peak: number }> = {
+      feed: { duration: 360, peak: 0.45 },
+      wash: { duration: 450, peak: 0.48 },
+      play: { duration: 520, peak: 0.50 },
+      heal: { duration: 600, peak: CONFIG.actionGlow.maxIntensity },
+      chat: { duration: 300, peak: 0.40 },
+      sleep: { duration: 500, peak: 0.35 },
+      clean: { duration: 400, peak: 0.42 }
+    };
+    
+    const glow = glowSettings[actionName] || { duration: 300, peak: 0.40 };
+    glowPulseRef.current = { 
+      startAt: performance.now(), 
+      durationMs: glow.duration, 
+      peak: glow.peak 
+    };
+    
+    // Эффекты частиц
     if (actionName === "feed" || actionName === "play" || actionName === "heal") {
       particlesRef.current?.burst(actionName);
     }
+    
+    // Специальные эффекты
     if (actionName === "chat") {
       chatBlinkBoostUntilRef.current = performance.now() + 2600;
     }
+    
     const start = performance.now();
     const startY = model.position.y;
     const startRotX = model.rotation.x;
     const startRotY = model.rotation.y;
     const startRotZ = model.rotation.z;
+    const startScale = model.scale.x;
 
     await new Promise<void>((resolve) => {
       const tick = () => {
         const t = Math.min(1, (performance.now() - start) / duration);
         const e = MathUtils.smoothstep(t, 0, 1);
-        if (actionName === "play") {
-          model.position.y = startY + Math.sin(e * Math.PI) * 0.32;
-          model.rotation.y = startRotY + Math.sin(e * Math.PI * 2) * 0.42;
-        } else if (actionName === "feed") {
-          model.rotation.x = startRotX + Math.sin(e * Math.PI * 2) * 0.1;
-        } else if (actionName === "wash") {
-          model.rotation.z = startRotZ + Math.sin(e * Math.PI * 2.8) * 0.1;
-        } else if (actionName === "heal") {
-          model.position.y = startY + Math.sin(e * Math.PI) * 0.16;
-        } else {
-          model.rotation.y = startRotY + Math.sin(e * Math.PI * 3) * 0.13;
+        
+        // Уникальные анимации для каждого действия
+        switch (actionName) {
+          case "feed":
+            // Кивание головой (ест)
+            model.rotation.x = startRotX + Math.sin(e * Math.PI * 3) * 0.15;
+            model.position.y = startY + Math.sin(e * Math.PI * 3) * 0.05;
+            break;
+            
+          case "wash":
+            // Покачивание из стороны в сторону (моется)
+            model.rotation.z = startRotZ + Math.sin(e * Math.PI * 4) * 0.12;
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 2) * 0.08;
+            break;
+            
+          case "play":
+            // Прыжки и вращение (играет)
+            model.position.y = startY + Math.sin(e * Math.PI * 2) * 0.35;
+            model.rotation.y = startRotY + e * Math.PI * 2;
+            model.scale.setScalar(startScale + Math.sin(e * Math.PI * 2) * 0.05);
+            break;
+            
+          case "heal":
+            // Плавное поднятие и легкое свечение (лечится)
+            model.position.y = startY + Math.sin(e * Math.PI) * 0.18;
+            model.rotation.x = startRotX + Math.sin(e * Math.PI) * 0.05;
+            model.scale.setScalar(startScale + Math.sin(e * Math.PI) * 0.03);
+            break;
+            
+          case "chat":
+            // Быстрые повороты головы (общается)
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 5) * 0.15;
+            model.rotation.x = startRotX + Math.sin(e * Math.PI * 4) * 0.08;
+            break;
+            
+          case "sleep":
+            // Медленное опускание и наклон (засыпает)
+            model.position.y = startY - e * 0.15;
+            model.rotation.z = startRotZ + e * 0.3;
+            model.scale.setScalar(startScale - e * 0.05);
+            break;
+            
+          case "clean":
+            // Быстрые движения (убирает)
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 6) * 0.2;
+            model.position.y = startY + Math.sin(e * Math.PI * 4) * 0.1;
+            break;
+            
+          default:
+            // Базовая анимация
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 3) * 0.13;
         }
+        
         if (t < 1) {
           requestAnimationFrame(tick);
         } else {
+          // Возврат в исходное положение
           model.position.y = startY;
           model.rotation.x = startRotX;
           model.rotation.y = startRotY;
           model.rotation.z = startRotZ;
+          model.scale.setScalar(startScale);
           resolve();
         }
       };
