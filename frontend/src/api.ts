@@ -379,6 +379,35 @@ function localBuy(itemKey: string): ОтветПокупки {
   return { state: { ...localStore.state }, event, item_key: item.item_key, price: item.price };
 }
 
+function localUseItem(itemKey: string): ОтветДействия {
+  const normalizedItemKey = itemKey.trim();
+  if (!normalizedItemKey) {
+    throw new Error(JSON.stringify({ detail: "Не указан предмет" }));
+  }
+
+  const inventoryItem = localStore.inventory.find((row) => row.item_key === normalizedItemKey);
+  if (!inventoryItem || inventoryItem.quantity <= 0) {
+    throw new Error(JSON.stringify({ detail: "У вас нет этого предмета" }));
+  }
+
+  inventoryItem.quantity -= 1;
+  if (inventoryItem.quantity <= 0) {
+    localStore.inventory = localStore.inventory.filter((row) => row.item_key !== normalizedItemKey);
+  }
+
+  const action: ТипДействия = normalizedItemKey.startsWith("food_")
+    ? "feed"
+    : normalizedItemKey.startsWith("wash_")
+      ? "wash"
+      : normalizedItemKey.startsWith("medicine_")
+        ? "heal"
+        : normalizedItemKey.startsWith("toy_")
+          ? "play"
+          : "chat";
+
+  return localAction(action);
+}
+
 function parseLimit(path: string): number {
   const parts = path.split("?");
   if (parts.length < 2) return 30;
@@ -440,6 +469,10 @@ function localFallbackRequest<T>(path: string, method: string, body: unknown): T
   if (path === "/shop/buy" && method === "POST") {
     const parsed = body as { item_key?: string } | undefined;
     return localBuy(String(parsed?.item_key ?? "")) as T;
+  }
+  if (path === "/use-item" && method === "POST") {
+    const parsed = body as { item_key?: string } | undefined;
+    return localUseItem(String(parsed?.item_key ?? "")) as T;
   }
   if (path.startsWith("/action/") && method === "POST") {
     const action = path.split("/").at(-1) as ТипДействия;
