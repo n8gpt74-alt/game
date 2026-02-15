@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,17 @@ class Settings(BaseSettings):
         "http://localhost:4173,http://127.0.0.1:4173,http://localhost:4280,http://127.0.0.1:4280,"
         "https://t.me,https://web.telegram.org"
     )
+
+    environment: str = "development"
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        is_production = self.environment.lower() in {"production", "prod"}
+        if is_production and self.allow_dev_auth:
+            raise ValueError("ALLOW_DEV_AUTH must be false in production")
+        if is_production and (self.secret_key == "change-me" or len(self.secret_key) < 32):
+            raise ValueError("SECRET_KEY must be set to a secure value (at least 32 chars) in production")
+        return self
 
 
 @lru_cache

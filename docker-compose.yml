@@ -24,7 +24,7 @@ services:
       context: ./backend
     env_file:
       - .env
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: sh -c "python -m app.migrations && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       db:
         condition: service_healthy
@@ -43,6 +43,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      backend:
+        condition: service_started
     restart: unless-stopped
 
   beat:
@@ -55,6 +57,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      backend:
         condition: service_started
     restart: unless-stopped
 

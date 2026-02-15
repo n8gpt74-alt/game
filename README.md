@@ -137,6 +137,8 @@ pip install -r requirements.txt
 $env:DATABASE_URL='sqlite:///./local_run.db'
 $env:ALLOW_DEV_AUTH='true'
 $env:SECRET_KEY='dev-secret-not-for-prod'
+$env:ENVIRONMENT='development'
+.\.venv\Scripts\python -m app.migrations
 .\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -179,7 +181,7 @@ sudo systemctl enable --now docker
 git clone <repo-url> tamagotchi
 cd tamagotchi
 cp .env.example .env
-# заполните .env реальными значениями
+# заполните .env реальными значениями (обязательно: ENVIRONMENT=production, ALLOW_DEV_AUTH=false, SECRET_KEY длиной 32+)
 docker compose up -d --build
 ```
 
