@@ -7,7 +7,9 @@ const FX_BY_ACTION: Record<ТипДействия, FxName> = {
   wash: "bubbles",
   play: "sparkles",
   heal: "healPlus",
-  chat: "hornGlow"
+  chat: "hornGlow",
+  sleep: "sparkles",
+  clean: "bubbles"
 };
 
 export function playFx(effectName: FxName, emitFx: (effect: FxName) => void): void {

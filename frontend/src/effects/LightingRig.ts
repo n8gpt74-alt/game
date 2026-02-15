@@ -122,10 +122,13 @@ export class LightingRig {
       wash: 0x4A90E2,    // Blue
       play: 0xFF69B4,    // Pink
       heal: 0x00FF7F,    // Green
+      chat: 0xB388FF,    // Purple
+      sleep: 0x6A8DFF,   // Soft blue
+      clean: 0x7FDBFF,   // Aqua
       levelup: 0xFFFFFF  // White
     };
     
-    const color = colors[action] || 0xFFFFFF;
+    const color = colors[action];
     
     const light = new THREE.PointLight(color, 1, 5);
     light.position.copy(position);

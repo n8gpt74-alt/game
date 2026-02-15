@@ -10,7 +10,8 @@ import {
   открытьСундукДня,
   отправитьРезультатМиниИгры,
   купитьТовар,
-  использоватьПредмет
+  использоватьПредмет,
+  выполнитьДействиеApi
 } from "./api";
 import { ActionDock } from "./components/ActionDock";
 import { FxOverlay, type FxName, type FxTrigger } from "./components/FxOverlay";
@@ -26,6 +27,7 @@ import { проигратьЗвук } from "./audio";
 import { загрузитьЛокальныйСнимок, сохранитьЛокальныйСнимок } from "./offlineCache";
 import {
   getTelegramInitData,
+  getTelegramUserId,
   getTelegramViewportHeight,
   initTelegramMiniApp,
   syncTelegramViewportHeightVar
@@ -44,7 +46,9 @@ import type {
 const MiniGamesScreen = lazy(() => import("./screens/MiniGamesScreen"));
 const PET = { name: "Искра", species: "Дракончик" } as const;
 const PET_TITLE = `${PET.species}  ${PET.name}`;
-const EQUIPPED_ITEMS_KEY = "дракончик_искра_экипировка_v1";
+const EQUIPPED_ITEMS_PREFIX = "дракончик_искра_экипировка_v2:";
+const LEGACY_EQUIPPED_ITEMS_KEY = "дракончик_искра_экипировка_v1";
+const GUEST_STORAGE_KEY = "дракончик_искра_guest_id_v1";
 const MINI_GAME_TYPE_BY_AGE: Record<ВозрастМиниИгры, ЗапросРезультатаМиниИгры["game_type"]> = {
   "2-4": "count_2_4",
   "5-6": "sum_4_6",
@@ -100,15 +104,57 @@ function применитьЛокальноеВосстановлениеЭне�
   return { ...next, energy: clamp100(next.energy + recovery) };
 }
 
-function загрузитьЭкипировку(): string[] {
+function ключЭкипировки(storageUserId: string): string {
+  return `${EQUIPPED_ITEMS_PREFIX}${storageUserId}`;
+}
+
+function загрузитьЭкипировку(storageUserId: string): string[] {
   try {
-    const raw = window.localStorage.getItem(EQUIPPED_ITEMS_KEY);
+    const raw =
+      window.localStorage.getItem(ключЭкипировки(storageUserId)) ??
+      window.localStorage.getItem(LEGACY_EQUIPPED_ITEMS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((value): value is string => typeof value === "string");
   } catch {
     return [];
+  }
+}
+
+function сохранитьЭкипировку(storageUserId: string, equippedItems: string[]): void {
+  try {
+    window.localStorage.setItem(ключЭкипировки(storageUserId), JSON.stringify(equippedItems));
+  } catch {
+    // Игнорируем ошибки localStorage.
+  }
+}
+
+function resolveStorageUserId(devUserId: string): string {
+  const telegramUserId = getTelegramUserId();
+  if (telegramUserId) {
+    return `tg_${telegramUserId}`;
+  }
+
+  const normalizedDevUserId = String(devUserId).trim();
+  if (normalizedDevUserId) {
+    return `dev_${normalizedDevUserId}`;
+  }
+
+  try {
+    const existingGuestId = window.localStorage.getItem(GUEST_STORAGE_KEY);
+    if (existingGuestId) {
+      return `guest_${existingGuestId}`;
+    }
+
+    const generatedGuestId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    window.localStorage.setItem(GUEST_STORAGE_KEY, generatedGuestId);
+    return `guest_${generatedGuestId}`;
+  } catch {
+    return "guest_fallback";
   }
 }
 
@@ -156,7 +202,9 @@ function названиеСобытия(action: string): string {
 }
 
 export default function App() {
-  const initialSnapshot = useMemo(() => загрузитьЛокальныйСнимок(), []);
+  const [storageUserId, setStorageUserId] = useState<string | null>(null);
+  const [hasLocalSnapshot, setHasLocalSnapshot] = useState(false);
+  const [localDataHydrated, setLocalDataHydrated] = useState(false);
   const unicornRef = useRef<Unicorn3DHandle | null>(null);
   const stateRef = useRef<СостояниеПитомца | null>(null);
   const busyRef = useRef(false);
@@ -164,12 +212,12 @@ export default function App() {
   const reloadRef = useRef<(() => Promise<void>) | null>(null);
 
   const [token, setToken] = useState("");
-  const [state, setState] = useState<СостояниеПитомца | null>(initialSnapshot?.state ?? null);
-  const [history, setHistory] = useState<ЗаписьСобытия[]>(initialSnapshot?.history ?? []);
-  const [daily, setDaily] = useState<СостояниеЗаданий | null>(initialSnapshot?.daily ?? null);
-  const [catalog, setCatalog] = useState<КаталогМагазина>(initialSnapshot?.catalog ?? { items: [] });
-  const [inventory, setInventory] = useState<ПредметИнвентаря[]>(initialSnapshot?.inventory ?? []);
-  const [equippedItems, setEquippedItems] = useState<string[]>(() => загрузитьЭкипировку());
+  const [state, setState] = useState<СостояниеПитомца | null>(null);
+  const [history, setHistory] = useState<ЗаписьСобытия[]>([]);
+  const [daily, setDaily] = useState<СостояниеЗаданий | null>(null);
+  const [catalog, setCatalog] = useState<КаталогМагазина>({ items: [] });
+  const [inventory, setInventory] = useState<ПредметИнвентаря[]>([]);
+  const [equippedItems, setEquippedItems] = useState<string[]>([]);
   const [isOffline, setIsOffline] = useState<boolean>(!window.navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -189,6 +237,11 @@ export default function App() {
   const [cooldownNowMs, setCooldownNowMs] = useState(() => Date.now());
 
   const userIdDev = useMemo(() => import.meta.env.VITE_DEV_AUTH_USER_ID ?? "10001", []);
+
+  useEffect(() => {
+    setStorageUserId(resolveStorageUserId(String(userIdDev)));
+  }, [userIdDev]);
+
   const washCooldownSec = useMemo(
     () => cooldownSeconds(cooldowns.washUntil, cooldownNowMs),
     [cooldowns.washUntil, cooldownNowMs]
@@ -211,7 +264,50 @@ export default function App() {
   }, [showMiniGamePicker, showMathMiniGames, panel]);
 
   useEffect(() => {
-    сохранитьЛокальныйСнимок({
+    if (!storageUserId) return;
+
+    setLocalDataHydrated(false);
+    const snapshot = загрузитьЛокальныйСнимок(storageUserId);
+    const hasSnapshot = Boolean(snapshot?.state);
+    setHasLocalSnapshot(hasSnapshot);
+
+    if (snapshot) {
+      setState(snapshot.state);
+      setHistory(snapshot.history);
+      setDaily(snapshot.daily);
+      setCatalog(snapshot.catalog);
+      setInventory(snapshot.inventory);
+    } else {
+      setState(null);
+      setHistory([]);
+      setDaily(null);
+      setCatalog({ items: [] });
+      setInventory([]);
+    }
+
+    setEquippedItems(загрузитьЭкипировку(storageUserId));
+
+    if (hasSnapshot && snapshot) {
+      const savedDate = new Date(snapshot.savedAt);
+      const now = new Date();
+      const minutesAgo = Math.floor((now.getTime() - savedDate.getTime()) / 60000);
+      if (minutesAgo < 1) {
+        setToast("Добро пожаловать! Прогресс загружен");
+      } else if (minutesAgo < 60) {
+        setToast(`Прогресс загружен (${minutesAgo} мин назад)`);
+      } else {
+        const hoursAgo = Math.floor(minutesAgo / 60);
+        setToast(`Прогресс загружен (${hoursAgo}ч назад)`);
+      }
+      window.setTimeout(() => setToast(""), 2200);
+    }
+
+    setLocalDataHydrated(true);
+  }, [storageUserId]);
+
+  useEffect(() => {
+    if (!storageUserId || !localDataHydrated) return;
+    сохранитьЛокальныйСнимок(storageUserId, {
       state,
       history: history.slice(0, 30),
       daily,
@@ -219,15 +315,12 @@ export default function App() {
       inventory,
       savedAt: new Date().toISOString()
     });
-  }, [state, history, daily, catalog, inventory]);
+  }, [storageUserId, localDataHydrated, state, history, daily, catalog, inventory]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(EQUIPPED_ITEMS_KEY, JSON.stringify(equippedItems));
-    } catch {
-      // Игнорируем ошибки localStorage.
-    }
-  }, [equippedItems]);
+    if (!storageUserId || !localDataHydrated) return;
+    сохранитьЭкипировку(storageUserId, equippedItems);
+  }, [storageUserId, localDataHydrated, equippedItems]);
 
   useEffect(() => {
     setEquippedItems((prev) =>
@@ -248,23 +341,10 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
-  useEffect(() => {
-    if (initialSnapshot?.state) {
-      const savedDate = new Date(initialSnapshot.savedAt);
-      const now = new Date();
-      const minutesAgo = Math.floor((now.getTime() - savedDate.getTime()) / 60000);
-      
-      if (minutesAgo < 1) {
-        показатьТост("Добро пожаловать! Прогресс загружен");
-      } else if (minutesAgo < 60) {
-        показатьТост(`Прогресс загружен (${minutesAgo} мин назад)`);
-      } else {
-        const hoursAgo = Math.floor(minutesAgo / 60);
-        показатьТост(`Прогресс загружен (${hoursAgo}ч назад)`);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const показатьОшибку = (text: string) => {
+    setError(text);
+  };
+
 
   useEffect(() => {
     const timer = window.setInterval(() => setCooldownNowMs(Date.now()), 250);
@@ -287,6 +367,7 @@ export default function App() {
         const safeInitData = initData || `dev_user_id=${userIdDev}`;
         const jwt = await авторизацияТелеграм(safeInitData);
         if (active) {
+          setStorageUserId(resolveStorageUserId(String(userIdDev)));
           setToken(jwt);
         }
       } catch (err) {
@@ -352,7 +433,7 @@ export default function App() {
         setIsSyncing(false);
         
         // Показываем уведомление о синхронизации только при первой загрузке
-        if (initialSnapshot?.state) {
+        if (hasLocalSnapshot) {
           показатьТост("✓ Прогресс синхронизирован");
         }
       } catch (err) {
@@ -380,7 +461,7 @@ export default function App() {
       window.clearInterval(timer);
       reloadRef.current = null;
     };
-  }, [token, initialSnapshot?.state]);
+  }, [token, hasLocalSnapshot]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -466,34 +547,19 @@ export default function App() {
         
         // Пробуждение - отправляем действие "sleep" на сервер для получения награды
         try {
-          const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "/api";
-          const response = await fetch(`${apiBase.replace(/\/+$/, "")}/action/sleep`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
-            }
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            const normalized = применитьСостояниеСервера(result.state);
-            setState(normalized);
-            setHistory((old) => [result.event, ...old].slice(0, 20));
-            setDaily(result.daily);
-            
-            // Показываем награду
-            const coins = result.reward?.coins || 0;
-            const xp = result.reward?.xp || 0;
-            показатьТост(`✨ Проснулись! +${coins} монет, +${xp} XP`);
-            проигратьЗвук("успех");
-            pushFx("sparkles");
-          } else {
-            console.error("Sleep API error:", await response.text());
-            показатьТост("✨ Проснулись! Энергия восстановлена");
-          }
-        } catch (err) {
-          console.error("Sleep reward error:", err);
+          const result = await выполнитьДействиеApi(token, "sleep");
+          const normalized = применитьСостояниеСервера(result.state);
+          setState(normalized);
+          setHistory((old) => [result.event, ...old].slice(0, 20));
+          setDaily(result.daily);
+
+          // Показываем награду
+          const coins = result.reward?.coins || 0;
+          const xp = result.reward?.xp || 0;
+          показатьТост(`✨ Проснулись! +${coins} монет, +${xp} XP`);
+          проигратьЗвук("успех");
+          pushFx("sparkles");
+        } catch {
           показатьТост("✨ Проснулись! Энергия восстановлена");
         }
         
@@ -522,29 +588,15 @@ export default function App() {
     показатьТост("🧹 Убираем...");
     
     try {
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE || "/api";
-      const response = await fetch(`${apiBase.replace(/\/+$/, "")}/action/clean`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        const normalized = применитьСостояниеСервера(result.state);
-        setState(normalized);
-        setHistory((old) => [result.event, ...old].slice(0, 20));
-        setDaily(result.daily);
-        
-        показатьТост("✨ Чисто! Сытость снизилась до 50%");
-        проигратьЗвук("успех");
-        pushFx("sparkles");
-      } else {
-        const errorText = await response.text();
-        показатьОшибку(parseError(new Error(errorText)));
-      }
+      const result = await выполнитьДействиеApi(token, "clean");
+      const normalized = применитьСостояниеСервера(result.state);
+      setState(normalized);
+      setHistory((old) => [result.event, ...old].slice(0, 20));
+      setDaily(result.daily);
+
+      показатьТост("✨ Чисто! Сытость снизилась до 50%");
+      проигратьЗвук("успех");
+      pushFx("sparkles");
     } catch (err) {
       показатьОшибку(parseError(err));
     } finally {
@@ -683,7 +735,7 @@ export default function App() {
       if (currentAction === "feed") {
         playFx("sparkles", pushFx);
       } else if (currentAction === "wash") {
-        playFx("splash", pushFx);
+        playFx("bubbles", pushFx);
       } else if (currentAction === "play") {
         playFx("hearts", pushFx);
       } else if (currentAction === "heal") {

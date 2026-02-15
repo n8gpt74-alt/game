@@ -5,7 +5,7 @@ type TimeChangeCallback = (time: number, period: TimePeriod) => void;
 
 export class TimeManager {
   private currentMinute: number = 0;
-  private period: TimePeriod = 'morning';
+  private currentPeriod: TimePeriod = 'morning';
   private running: boolean = false;
   private lastUpdateTime: number = 0;
   private callbacks: TimeChangeCallback[] = [];
@@ -41,9 +41,9 @@ export class TimeManager {
     }
   };
   
-  constructor() {
-    this.currentMinute = 0;
-    this.period = this.getPeriodForTime(0);
+  constructor(initialMinute: number = 0) {
+    this.currentMinute = ((initialMinute % 24) + 24) % 24;
+    this.currentPeriod = this.getPeriodForTime(this.currentMinute);
   }
   
   start(): void {
@@ -78,8 +78,8 @@ export class TimeManager {
     
     // Check for period change
     const newPeriod = this.getPeriodForTime(this.currentMinute);
-    if (newPeriod !== this.period) {
-      this.period = newPeriod;
+    if (newPeriod !== this.currentPeriod) {
+      this.currentPeriod = newPeriod;
       this.notifyCallbacks();
     }
     
@@ -94,21 +94,21 @@ export class TimeManager {
   }
   
   getSkyColors(): SkyColors {
-    const currentPalette = this.COLOR_PALETTES[this.period];
+    const currentPalette = this.COLOR_PALETTES[this.currentPeriod];
     
     // Get next period for smooth transitions
-    const nextPeriod = this.getNextPeriod(this.period);
+    const nextPeriod = this.getNextPeriod(this.currentPeriod);
     const nextPalette = this.COLOR_PALETTES[nextPeriod];
     
     // Calculate transition progress (30 seconds = 0.5 minutes)
-    const periodStart = this.getPeriodStartTime(this.period);
+    const periodStart = this.getPeriodStartTime(this.currentPeriod);
     const timeSincePeriodStart = this.currentMinute - periodStart;
     const transitionDuration = 0.5; // 30 seconds
     
     if (timeSincePeriodStart < transitionDuration) {
       // In transition, interpolate colors
       const t = timeSincePeriodStart / transitionDuration;
-      const prevPeriod = this.getPreviousPeriod(this.period);
+      const prevPeriod = this.getPreviousPeriod(this.currentPeriod);
       const prevPalette = this.COLOR_PALETTES[prevPeriod];
       
       return {
@@ -130,16 +130,16 @@ export class TimeManager {
       night: 0.3
     };
     
-    const currentIntensity = periodIntensities[this.period];
+    const currentIntensity = periodIntensities[this.currentPeriod];
     
     // Smooth transition at period boundaries
-    const periodStart = this.getPeriodStartTime(this.period);
+    const periodStart = this.getPeriodStartTime(this.currentPeriod);
     const timeSincePeriodStart = this.currentMinute - periodStart;
     const transitionDuration = 0.5;
     
     if (timeSincePeriodStart < transitionDuration) {
       const t = timeSincePeriodStart / transitionDuration;
-      const prevPeriod = this.getPreviousPeriod(this.period);
+      const prevPeriod = this.getPreviousPeriod(this.currentPeriod);
       const prevIntensity = periodIntensities[prevPeriod];
       return prevIntensity + (currentIntensity - prevIntensity) * t;
     }
@@ -184,7 +184,7 @@ export class TimeManager {
   getState(): TimeState {
     return {
       currentMinute: this.currentMinute,
-      period: this.period,
+      period: this.currentPeriod,
       skyColors: this.getSkyColors(),
       lightIntensity: this.getLightIntensity(),
       sunPosition: this.getSunPosition(),
@@ -198,7 +198,7 @@ export class TimeManager {
   
   private notifyCallbacks(): void {
     for (const callback of this.callbacks) {
-      callback(this.currentMinute, this.period);
+      callback(this.currentMinute, this.currentPeriod);
     }
   }
   
@@ -236,16 +236,25 @@ export class TimeManager {
   
   // Test helpers
   setTime(minutes: number): void {
-    this.currentMinute = minutes % 24;
-    this.period = this.getPeriodForTime(this.currentMinute);
+    this.currentMinute = ((minutes % 24) + 24) % 24;
+    this.currentPeriod = this.getPeriodForTime(this.currentMinute);
   }
   
   advance(minutes: number): void {
-    this.currentMinute = (this.currentMinute + minutes) % 24;
-    this.period = this.getPeriodForTime(this.currentMinute);
+    this.currentMinute = ((this.currentMinute + minutes) % 24 + 24) % 24;
+    this.currentPeriod = this.getPeriodForTime(this.currentMinute);
   }
   
   get currentTime(): number {
     return this.currentMinute;
+  }
+
+  get period(): TimePeriod {
+    return this.currentPeriod;
+  }
+
+  dispose(): void {
+    this.pause();
+    this.callbacks = [];
   }
 }

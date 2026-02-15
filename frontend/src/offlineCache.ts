@@ -15,15 +15,23 @@ export type ЛокальныйСнимок = {
   savedAt: string;
 };
 
-const SNAPSHOT_KEY = "дракончик_искра_кэш_v1";
+const SNAPSHOT_PREFIX = "дракончик_искра_кэш_v2:";
 
+const LEGACY_SNAPSHOT_KEY = "дракончик_искра_кэш_v1";
+const SNAPSHOT_SCHEMA_VERSION = 2;
+
+function snapshotKey(storageUserId: string): string {
+  return `${SNAPSHOT_PREFIX}${storageUserId}`;
+}
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function загрузитьЛокальныйСнимок(): ЛокальныйСнимок | null {
+export function загрузитьЛокальныйСнимок(storageUserId: string): ЛокальныйСнимок | null {
   try {
-    const raw = window.localStorage.getItem(SNAPSHOT_KEY);
+    const raw =
+      window.localStorage.getItem(snapshotKey(storageUserId)) ??
+      window.localStorage.getItem(LEGACY_SNAPSHOT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!isObject(parsed)) return null;
@@ -40,9 +48,9 @@ export function загрузитьЛокальныйСнимок(): Локаль
   }
 }
 
-export function сохранитьЛокальныйСнимок(snapshot: ЛокальныйСнимок): void {
+export function сохранитьЛокальныйСнимок(storageUserId: string, snapshot: ЛокальныйСнимок): void {
   try {
-    window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    window.localStorage.setItem(snapshotKey(storageUserId), JSON.stringify({ ...snapshot, schemaVersion: SNAPSHOT_SCHEMA_VERSION }));
   } catch {
     // Если localStorage недоступен, продолжаем без офлайн-кэша.
   }

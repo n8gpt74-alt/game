@@ -110,6 +110,7 @@ export interface ButterflyObject {
 
 export interface LeafParticle {
   mesh: THREE.Mesh;
+  position: THREE.Vector3;
   velocity: THREE.Vector3;
   rotation: THREE.Euler;
   rotationSpeed: THREE.Euler;
@@ -134,4 +135,4 @@ export interface ActionLight {
 }
 
 // Action types
-export type ActionType = 'feed' | 'wash' | 'play' | 'heal' | 'levelup';
+export type ActionType = 'feed' | 'wash' | 'play' | 'heal' | 'chat' | 'sleep' | 'clean' | 'levelup';

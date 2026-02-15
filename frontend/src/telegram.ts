@@ -1,5 +1,13 @@
+interface TelegramWebAppUser {
+  id?: number | string;
+}
+
+interface TelegramInitDataUnsafe {
+  user?: TelegramWebAppUser;
+}
 interface TelegramWebApp {
   initData?: string;
+  initDataUnsafe?: TelegramInitDataUnsafe;
   ready?: () => void;
   expand?: () => void;
   setHeaderColor?: (color: string) => void;
@@ -21,6 +29,33 @@ declare global {
 export function getTelegramInitData(): string {
   const app = window.Telegram?.WebApp;
   return app?.initData ?? "";
+}
+
+function parseUserIdFromInitData(initData: string): string | null {
+  if (!initData) return null;
+  try {
+    const params = new URLSearchParams(initData);
+    const rawUser = params.get("user");
+    if (!rawUser) return null;
+    const parsed = JSON.parse(rawUser) as { id?: number | string };
+    if (typeof parsed.id === "number" || typeof parsed.id === "string") {
+      const normalized = String(parsed.id).trim();
+      return normalized || null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function getTelegramUserId(): string | null {
+  const app = window.Telegram?.WebApp;
+  const unsafeId = app?.initDataUnsafe?.user?.id;
+  if (typeof unsafeId === "number" || typeof unsafeId === "string") {
+    const normalized = String(unsafeId).trim();
+    if (normalized) return normalized;
+  }
+  return parseUserIdFromInitData(app?.initData ?? "");
 }
 
 export function getTelegramViewportHeight(): number {

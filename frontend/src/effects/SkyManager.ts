@@ -95,7 +95,7 @@ export class SkyManager {
     if (!this.scene) return;
     
     const geometry = new THREE.SphereGeometry(1.5, 32, 32);
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0xFFF5E1,
       emissive: 0xFFF5E1,
       emissiveIntensity: 1
@@ -117,7 +117,7 @@ export class SkyManager {
     if (!this.scene) return;
     
     const geometry = new THREE.SphereGeometry(1.2, 32, 32);
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0xE0E0E0,
       emissive: 0xE0E0E0,
       emissiveIntensity: 0.3
