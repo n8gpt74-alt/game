@@ -2,31 +2,33 @@ import { useEffect, useState } from "react";
 
 type ItemAnimationProps = {
   itemKey: string;
+  durationMs?: number;
   onComplete: () => void;
 };
 
-export function ItemAnimation({ itemKey, onComplete }: ItemAnimationProps) {
+export function ItemAnimation({ itemKey, durationMs = 1800, onComplete }: ItemAnimationProps) {
   const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
-    // Анимация длится 1.8 секунды
+    // Анимация длится столько же, сколько передано в App
     const timer = setTimeout(() => {
       setIsAnimating(false);
       onComplete();
-    }, 1800);
+    }, durationMs);
 
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, [durationMs, onComplete]);
 
   if (!isAnimating) return null;
 
   const icon = getItemIcon(itemKey);
   const category = getItemCategory(itemKey);
+  const itemClassName = getItemClassName(itemKey);
   const effect = getItemEffect(itemKey);
 
   return (
     <div className="item-animation">
-      <div className={`item-flying ${category}`}>
+      <div className={`item-flying ${category} ${itemClassName}`}>
         {icon}
       </div>
       {effect && <div className={`item-effect ${effect}`} />}
@@ -76,9 +78,10 @@ function getItemEffect(itemKey: string): string | null {
 
     // Награды дня
     reward_login_bonus: "coins",
-    reward_daily_chest: "sparkles",
+    reward_daily_chest: "chestBurst",
     reward_event: "sparkles",
     reward_achievement: "sparkles",
+    reward_minigame_medal: "medalShine",
 
   };
   return effects[itemKey] || null;
@@ -121,10 +124,15 @@ function getItemIcon(itemKey: string): string {
 
     // Награды дня
     reward_login_bonus: "💰",
-    reward_daily_chest: "🎁",
+    reward_daily_chest: "🧰",
     reward_event: "🎉",
     reward_achievement: "🏆",
+    reward_minigame_medal: "🏅",
 
   };
   return icons[itemKey] || "📦";
+}
+
+function getItemClassName(itemKey: string): string {
+  return itemKey.replaceAll("_", "-");
 }

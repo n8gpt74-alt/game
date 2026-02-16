@@ -271,7 +271,7 @@ export default function App() {
   const [showMathMiniGames, setShowMathMiniGames] = useState(false);
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectedAction, setSelectedAction] = useState<ТипДействия | null>(null);
-  const [animatingItems, setAnimatingItems] = useState<Array<{ id: number; itemKey: string }>>([]);
+  const [animatingItems, setAnimatingItems] = useState<Array<{ id: number; itemKey: string; durationMs: number }>>([]);
   const [panel, setPanel] = useState<Панель>("нет");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -435,7 +435,7 @@ export default function App() {
 
   const запуститьАнимациюПредмета = useCallback((itemKey: string, durationMs: number = 1800) => {
     const animationId = Date.now() + Math.random();
-    setAnimatingItems(prev => [...prev, { id: animationId, itemKey }]);
+    setAnimatingItems(prev => [...prev, { id: animationId, itemKey, durationMs }]);
     window.setTimeout(() => {
       setAnimatingItems(prev => prev.filter(item => item.id !== animationId));
     }, durationMs);
@@ -946,6 +946,7 @@ export default function App() {
       void refreshEventAndAchievements();
 
       playFx("sparkles", pushFx);
+      запуститьАнимациюПредмета("reward_minigame_medal", 2200);
       проигратьЗвук("успех");
       показатьТост(`Мини-игра завершена: +${miniResult.xp} опыта`);
       показатьТост(`Награда: +${result.reward.xp} опыта, +${result.reward.coins} монет`);
@@ -988,6 +989,7 @@ export default function App() {
       void refreshEventAndAchievements();
 
       playFx("sparkles", pushFx);
+      запуститьАнимациюПредмета("reward_minigame_medal", 2200);
       проигратьЗвук("успех");
       показатьТост(`Награда: +${result.reward.xp} опыта, +${result.reward.coins} монет`);
       if (!естьСерверноеВосстановлениеЭнергии(result)) {
@@ -1259,6 +1261,7 @@ export default function App() {
             <ItemAnimation
               key={item.id}
               itemKey={item.itemKey}
+              durationMs={item.durationMs}
               onComplete={() => {
                 // Callback больше не нужен, таймер сам уберёт
               }}
