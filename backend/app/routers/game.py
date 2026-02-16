@@ -8,11 +8,14 @@ from app.database import get_db
 from app.deps import get_current_user_id
 from app.models import EventLog
 from app.schemas import (
+    AchievementClaimRequest,
+    AchievementStateOut,
     ActionResponse,
     DailyStateOut,
     DailyTaskOut,
     EventLogOut,
     InventoryOut,
+    LiveEventStateOut,
     MinigameResultRequest,
     MinigameResultResponse,
     PetStateOut,
@@ -21,17 +24,23 @@ from app.schemas import (
     ShopBuyResponse,
     ShopCatalogOut,
     ShopItemOut,
+    StreakStateOut,
 )
 from app.services.game import (
     buy_shop_item,
+    claim_active_event_for_pet,
+    claim_achievement_for_pet,
     claim_daily_chest_for_pet,
     claim_login_bonus_for_pet,
     ensure_pet_state,
     execute_action,
     execute_minigame,
+    get_active_event,
+    get_achievements_state,
     get_daily_state,
     get_inventory,
     get_shop_catalog,
+    get_streak_state,
     run_decay,
     serialize_pet_state,
     use_item,
@@ -275,3 +284,67 @@ def use_item_endpoint(payload: ShopBuyRequest, db: DbDep, user_id: UserDep) -> A
         notifications=result.notifications,
     )
 
+
+
+@router.get("/streak", response_model=StreakStateOut)
+def streak(db: DbDep, user_id: UserDep) -> StreakStateOut:
+    payload = get_streak_state(db, user_id)
+    return StreakStateOut(**payload)
+
+
+@router.get("/events/active", response_model=LiveEventStateOut | None)
+def events_active(db: DbDep, user_id: UserDep) -> LiveEventStateOut | None:
+    state = get_active_event(db, user_id)
+    if state is None:
+        return None
+    return LiveEventStateOut(**state.__dict__)
+
+
+@router.post("/events/claim", response_model=ActionResponse)
+def events_claim(db: DbDep, user_id: UserDep) -> ActionResponse:
+    pet = ensure_pet_state(db, user_id)
+    try:
+        result = claim_active_event_for_pet(db, pet)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ActionResponse(
+        state=PetStateOut(**serialize_pet_state(result.pet)),
+        event=EventLogOut(
+            id=result.event.id,
+            action=result.event.action,
+            payload=result.event.payload,
+            created_at=result.event.created_at,
+        ),
+        reward=_to_reward_out(result.reward),
+        daily=_to_daily_out(get_daily_state(db, user_id)),
+        notifications=result.notifications,
+    )
+
+
+@router.get("/achievements", response_model=list[AchievementStateOut])
+def achievements(db: DbDep, user_id: UserDep) -> list[AchievementStateOut]:
+    rows = get_achievements_state(db, user_id)
+    return [AchievementStateOut(**row.__dict__) for row in rows]
+
+
+@router.post("/achievements/claim", response_model=ActionResponse)
+def achievements_claim(payload: AchievementClaimRequest, db: DbDep, user_id: UserDep) -> ActionResponse:
+    pet = ensure_pet_state(db, user_id)
+    try:
+        result = claim_achievement_for_pet(db, pet, payload.achievement_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ActionResponse(
+        state=PetStateOut(**serialize_pet_state(result.pet)),
+        event=EventLogOut(
+            id=result.event.id,
+            action=result.event.action,
+            payload=result.event.payload,
+            created_at=result.event.created_at,
+        ),
+        reward=_to_reward_out(result.reward),
+        daily=_to_daily_out(get_daily_state(db, user_id)),
+        notifications=result.notifications,
+    )

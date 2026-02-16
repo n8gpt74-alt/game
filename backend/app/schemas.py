@@ -69,6 +69,42 @@ class DailyStateOut(BaseModel):
     all_completed: bool
 
 
+class StreakStateOut(BaseModel):
+    current: int
+    best: int
+    last_claim_date: str | None = None
+
+
+class LiveEventStateOut(BaseModel):
+    event_key: str
+    title: str
+    description: str
+    target_points: int
+    progress_points: int
+    reward_coins: int
+    reward_xp: int
+    started_at: datetime
+    ends_at: datetime
+    completed: bool
+    claimed: bool
+
+
+class AchievementStateOut(BaseModel):
+    achievement_key: str
+    title: str
+    description: str
+    target: int
+    progress: int
+    reward_coins: int
+    reward_xp: int
+    completed: bool
+    claimed: bool
+
+
+class AchievementClaimRequest(BaseModel):
+    achievement_key: str
+
+
 class ActionResponse(BaseModel):
     state: PetStateOut
     event: EventLogOut
