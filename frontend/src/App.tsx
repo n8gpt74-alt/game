@@ -184,6 +184,32 @@ function категорияКосметики(itemKey: string): "decor" | "horn"
   return "other";
 }
 
+function количествоПредмета(inventory: ПредметИнвентаря[], itemKey: string): number {
+  return inventory.reduce((total, row) => (row.item_key === itemKey ? total + row.quantity : total), 0);
+}
+
+function обновитьИнвентарь(inventory: ПредметИнвентаря[], itemKey: string, delta: number): ПредметИнвентаря[] {
+  const normalized = itemKey.trim();
+  if (!normalized || delta === 0) return inventory;
+
+  const next = new Map<string, number>();
+  for (const row of inventory) {
+    if (!row.item_key || row.quantity <= 0) continue;
+    next.set(row.item_key, (next.get(row.item_key) ?? 0) + row.quantity);
+  }
+
+  const updatedQuantity = (next.get(normalized) ?? 0) + delta;
+  if (updatedQuantity > 0) {
+    next.set(normalized, updatedQuantity);
+  } else {
+    next.delete(normalized);
+  }
+
+  return Array.from(next.entries())
+    .map(([key, quantity]) => ({ item_key: key, quantity }))
+    .sort((left, right) => left.item_key.localeCompare(right.item_key));
+}
+
 function мягкоеПредупреждение(state: СостояниеПитомца | null): string {
   if (!state) return "";
   if (state.hunger < 30) return `${PET.species} ${PET.name} проголодался`;
@@ -398,7 +424,7 @@ export default function App() {
     setEquippedItems((prev) =>
       prev.filter((itemKey) => {
         if (!этоКосметика(itemKey)) return false;
-        return (inventory.find((item) => item.item_key === itemKey)?.quantity ?? 0) > 0;
+        return количествоПредмета(inventory, itemKey) > 0;
       })
     );
   }, [inventory]);
@@ -836,9 +862,13 @@ export default function App() {
       setHistory((old) => [result.event, ...old].slice(0, 20));
       setDaily(result.daily);
       
-      // Обновляем инвентарь
-      const inventoryData = await получитьИнвентарь(token);
-      setInventory(inventoryData);
+      setInventory((prev) => обновитьИнвентарь(prev, itemKey, -1));
+      try {
+        const inventoryData = await получитьИнвентарь(token);
+        setInventory(inventoryData);
+      } catch {
+        // Сохраняем оптимистичное состояние инвентаря.
+      }
       void refreshEventAndAchievements();
 
       
@@ -1089,9 +1119,14 @@ export default function App() {
       const result = await купитьТовар(token, itemKey);
       setState(применитьСостояниеСервера(result.state));
       setHistory((old) => [result.event, ...old].slice(0, 20));
-      const [catalogData, inventoryData] = await Promise.all([получитьКаталогМагазина(token), получитьИнвентарь(token)]);
-      setCatalog(catalogData);
-      setInventory(inventoryData);
+      setInventory((prev) => обновитьИнвентарь(prev, result.item_key, 1));
+      const [catalogData, inventoryData] = await Promise.allSettled([получитьКаталогМагазина(token), получитьИнвентарь(token)]);
+      if (catalogData.status === "fulfilled") {
+        setCatalog(catalogData.value);
+      }
+      if (inventoryData.status === "fulfilled") {
+        setInventory(inventoryData.value);
+      }
       показатьТост("Покупка завершена");
       проигратьЗвук("покупка");
     } catch (err) {
@@ -1104,7 +1139,7 @@ export default function App() {
   const toggleEquipItem = useCallback(
     (itemKey: string) => {
       if (!этоКосметика(itemKey)) return;
-      const owned = (inventory.find((item) => item.item_key === itemKey)?.quantity ?? 0) > 0;
+      const owned = количествоПредмета(inventory, itemKey) > 0;
       if (!owned) return;
       проигратьЗвук("нажатие");
 
@@ -1138,7 +1173,7 @@ export default function App() {
   const activeRoomTheme = useMemo(() => equippedItems.find((key) => key.startsWith("theme_")) ?? null, [equippedItems]);
   const inventoryMap = useMemo(() => {
     return inventory.reduce<Record<string, number>>((acc, item) => {
-      acc[item.item_key] = item.quantity;
+      acc[item.item_key] = (acc[item.item_key] ?? 0) + item.quantity;
       return acc;
     }, {});
   }, [inventory]);

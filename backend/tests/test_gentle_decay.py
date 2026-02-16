@@ -21,37 +21,37 @@ class MockPet:
 
 
 def test_gentle_decay_short_absence():
-    """Тест: короткое отсутствие (2 часа) - нормальная деградация"""
+    """Тест: короткое отсутствие (2 часа) - заметная, но не критичная деградация"""
     pet = MockPet()
     now = pet.last_tick_at + timedelta(hours=2)
     
     apply_time_decay(pet, now, cap_seconds=21600, lonely=False)
     
     # После 2 часов деградация должна быть умеренной
-    assert pet.hunger >= 68, f"Голод слишком низкий: {pet.hunger}"
-    assert pet.energy >= 68, f"Энергия слишком низкая: {pet.energy}"
+    assert pet.hunger >= 66, f"Голод слишком низкий: {pet.hunger}"
+    assert pet.energy >= 70, f"Энергия слишком низкая: {pet.energy}"
     assert pet.hygiene >= 68, f"Чистота слишком низкая: {pet.hygiene}"
-    assert pet.happiness >= 68, f"Настроение слишком низкое: {pet.happiness}"
+    assert pet.happiness >= 74, f"Настроение слишком низкое: {pet.happiness}"
     print(f"✓ 2 часа: голод={pet.hunger}, энергия={pet.energy}, чистота={pet.hygiene}, настроение={pet.happiness}")
 
 
 def test_gentle_decay_medium_absence():
-    """Тест: среднее отсутствие (12 часов) - замедленная деградация"""
+    """Тест: среднее отсутствие (12 часов) - деградация ограничена cap"""
     pet = MockPet()
     now = pet.last_tick_at + timedelta(hours=12)
     
     apply_time_decay(pet, now, cap_seconds=21600, lonely=False)
     
-    # После 12 часов деградация должна быть замедленной (cap 6 часов)
-    assert pet.hunger > 50, f"Голод слишком низкий: {pet.hunger}"
-    assert pet.energy > 50, f"Энергия слишком низкая: {pet.energy}"
-    assert pet.hygiene > 50, f"Чистота слишком низкая: {pet.hygiene}"
-    assert pet.happiness > 50, f"Настроение слишком низкое: {pet.happiness}"
+    # После 12 часов применяется только cap (6 часов), но показатели должны оставаться играбельными
+    assert pet.hunger > 40, f"Голод слишком низкий: {pet.hunger}"
+    assert pet.energy > 45, f"Энергия слишком низкая: {pet.energy}"
+    assert pet.hygiene > 43, f"Чистота слишком низкая: {pet.hygiene}"
+    assert pet.happiness > 35, f"Настроение слишком низкое: {pet.happiness}"
     print(f"✓ 12 часов: голод={pet.hunger}, энергия={pet.energy}, чистота={pet.hygiene}, настроение={pet.happiness}")
 
 
 def test_gentle_decay_long_absence():
-    """Тест: долгое отсутствие (48 часов) - минимальная деградация"""
+    """Тест: долгое отсутствие (48 часов) - деградация ограничивается cap"""
     pet = MockPet()
     now = pet.last_tick_at + timedelta(hours=48)
     
@@ -61,7 +61,7 @@ def test_gentle_decay_long_absence():
     assert pet.hunger > 40, f"Голод слишком низкий: {pet.hunger}"
     assert pet.energy > 40, f"Энергия слишком низкая: {pet.energy}"
     assert pet.hygiene > 40, f"Чистота слишком низкая: {pet.hygiene}"
-    assert pet.health > 70, f"Здоровье не должно сильно падать: {pet.health}"
+    assert pet.health > 65, f"Здоровье не должно сильно падать: {pet.health}"
     print(f"✓ 48 часов: голод={pet.hunger}, энергия={pet.energy}, чистота={pet.hygiene}, здоровье={pet.health}")
 
 
@@ -72,8 +72,8 @@ def test_gentle_decay_with_loneliness():
     
     apply_time_decay(pet, now, cap_seconds=21600, lonely=True)
     
-    # С одиночеством настроение падает быстрее, но не критично
-    assert pet.happiness > 35, f"Настроение слишком низкое даже с одиночеством: {pet.happiness}"
+    # С одиночеством настроение падает быстрее, но не должно обнуляться
+    assert pet.happiness > 20, f"Настроение слишком низкое даже с одиночеством: {pet.happiness}"
     assert pet.hunger > 40, f"Голод слишком низкий: {pet.hunger}"
     print(f"✓ 30 часов (одиночество): настроение={pet.happiness}, голод={pet.hunger}")
 
@@ -81,8 +81,8 @@ def test_gentle_decay_with_loneliness():
 def test_no_health_drop_without_critical_stats():
     """Тест: здоровье не падает без критических значений"""
     pet = MockPet()
-    pet.hunger = 60  # Выше критического порога (25)
-    pet.hygiene = 60  # Выше критического порога (25)
+    pet.hunger = 60  # Выше порога деградации здоровья (45)
+    pet.hygiene = 60  # Выше порога деградации здоровья (40)
     now = pet.last_tick_at + timedelta(hours=2)  # Короткий период
     
     initial_health = pet.health

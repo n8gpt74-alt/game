@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { ПредметИнвентаря, ТипДействия } from "../types";
 
 type ItemSelectorProps = {
@@ -32,10 +33,15 @@ export function ItemSelector({ action, inventory, onSelect, onCancel }: ItemSele
   const category = ACTION_TO_CATEGORY[action];
   
   // Фильтруем предметы по категории
-  const availableItems = inventory.filter(item => {
-    if (item.quantity <= 0) return false;
-    return item.item_key.startsWith(`${category}_`);
-  });
+  const availableItems = useMemo(() => {
+    const byItemKey = new Map<string, number>();
+    for (const item of inventory) {
+      if (item.quantity <= 0) continue;
+      if (!item.item_key.startsWith(`${category}_`)) continue;
+      byItemKey.set(item.item_key, (byItemKey.get(item.item_key) ?? 0) + item.quantity);
+    }
+    return Array.from(byItemKey.entries()).map(([item_key, quantity]) => ({ item_key, quantity }));
+  }, [category, inventory]);
 
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true">

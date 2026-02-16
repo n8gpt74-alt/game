@@ -51,46 +51,37 @@ def apply_time_decay(state: PetLike, now: datetime, cap_seconds: int, lonely: bo
         state.last_tick_at = now_utc
         return 0
 
-    # Мягкая деградация: замедляем со временем
-    hours_elapsed = elapsed_seconds / 3600.0
-    
-    # Коэффициент замедления деградации
-    if hours_elapsed <= 6:
-        decay_multiplier = 1.0  # Нормальная скорость до 6 часов
-    elif hours_elapsed <= 24:
-        decay_multiplier = 0.5  # 50% скорости от 6 до 24 часов
-    else:
-        decay_multiplier = 0.25  # 25% скорости после 24 часов
-    
-    ticks = (effective_seconds / 600.0) * decay_multiplier
+    # Более активная деградация: питомцу нужен регулярный уход
+    ticks = effective_seconds / 600.0
 
-    # Базовая деградация (медленнее)
-    state.hunger = clamp(state.hunger - (0.8 * ticks))
-    state.energy = clamp(state.energy - (0.8 * ticks))
-    state.hygiene = clamp(state.hygiene - (0.8 * ticks))
+    # Базовая деградация основных статов
+    state.hunger = clamp(state.hunger - (1.0 * ticks))
+    state.energy = clamp(state.energy - (0.95 * ticks))
+    state.hygiene = clamp(state.hygiene - (0.9 * ticks))
 
-    # Настроение падает медленнее
-    happiness_drop = 0.25 * ticks
-    if state.hunger < 40:
+    # Настроение падает быстрее при запущенных базовых потребностях
+    happiness_drop = 0.3 * ticks
+    if state.hunger < 55:
+        happiness_drop += 0.35 * ticks
+    if state.energy < 45:
+        happiness_drop += 0.3 * ticks
+    if state.hygiene < 50:
         happiness_drop += 0.4 * ticks
-    if state.energy < 35:
-        happiness_drop += 0.4 * ticks
-    if state.hygiene < 40:
-        happiness_drop += 0.45 * ticks
     if lonely:
-        happiness_drop *= 1.5  # Меньший штраф за одиночество
+        happiness_drop *= 1.4
 
     state.happiness = clamp(state.happiness - happiness_drop)
 
-    # Здоровье падает только при критических значениях
+    # Здоровье начинает проседать, если долго игнорировать базовый уход
     health_drop = 0.0
-    if state.hunger < 25:  # Более низкий порог
-        health_drop += 0.6 * ticks
-    if state.hygiene < 25:  # Более низкий порог
-        health_drop += 0.7 * ticks
+    if state.hunger < 45:
+        health_drop += 0.45 * ticks
+    if state.hygiene < 40:
+        health_drop += 0.55 * ticks
+    if state.energy < 25:
+        health_drop += 0.35 * ticks
     if health_drop > 0:
         state.health = clamp(state.health - health_drop)
-
     state.last_tick_at = now_utc
     return effective_seconds
 

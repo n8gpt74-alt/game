@@ -159,12 +159,17 @@ def _upsert_inventory(db: Session, user_id: int, item_key: str, qty_delta: int) 
         select(Inventory).where(Inventory.user_id == user_id, Inventory.item_key == item_key)
     ).scalar_one_or_none()
     if row is None:
-        row = Inventory(user_id=user_id, item_key=item_key, quantity=max(0, qty_delta))
+        if qty_delta <= 0:
+            return
+        row = Inventory(user_id=user_id, item_key=item_key, quantity=qty_delta)
         db.add(row)
     else:
-        row.quantity = max(0, row.quantity + qty_delta)
+        next_quantity = row.quantity + qty_delta
+        if next_quantity <= 0:
+            db.delete(row)
+        else:
+            row.quantity = next_quantity
     db.flush()
-
 
 def _build_daily_payload(progress: DailyProgress) -> dict[str, Any]:
     tasks = read_tasks(progress)
@@ -492,7 +497,7 @@ def execute_minigame(
 
 
 def get_inventory(db: Session, user_id: int) -> list[Inventory]:
-    return list(db.execute(select(Inventory).where(Inventory.user_id == user_id)).scalars())
+    return list(db.execute(select(Inventory).where(Inventory.user_id == user_id, Inventory.quantity > 0).order_by(Inventory.item_key)).scalars())
 
 
 def get_daily_state(db: Session, user_id: int) -> dict[str, Any]:
