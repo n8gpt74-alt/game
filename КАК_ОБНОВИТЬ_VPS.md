@@ -13,7 +13,7 @@ git pull origin main
 
 # Пересобрать и перезапустить контейнеры
 docker-compose down
-docker-compose build --no-cache frontend
+docker-compose build --no-cache
 docker-compose up -d
 
 # Проверить статус
