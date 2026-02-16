@@ -25,11 +25,14 @@ from app.schemas import (
     ShopCatalogOut,
     ShopItemOut,
     StreakStateOut,
+    QuestClaimRequest,
+    QuestOut,
 )
 from app.services.game import (
     buy_shop_item,
     claim_active_event_for_pet,
     claim_achievement_for_pet,
+    claim_quest_step_for_pet,
     claim_daily_chest_for_pet,
     claim_login_bonus_for_pet,
     ensure_pet_state,
@@ -40,6 +43,7 @@ from app.services.game import (
     get_daily_state,
     get_inventory,
     get_shop_catalog,
+    get_quests_state,
     get_streak_state,
     run_decay,
     serialize_pet_state,
@@ -258,6 +262,7 @@ def history(db: DbDep, user_id: UserDep, limit: int = Query(default=30, ge=1, le
 
 @router.get("/inventory", response_model=list[InventoryOut])
 def inventory(db: DbDep, user_id: UserDep) -> list[InventoryOut]:
+    ensure_pet_state(db, user_id)
     rows = get_inventory(db, user_id)
     return [InventoryOut(item_key=row.item_key, quantity=row.quantity) for row in rows]
 
@@ -333,6 +338,34 @@ def achievements_claim(payload: AchievementClaimRequest, db: DbDep, user_id: Use
     pet = ensure_pet_state(db, user_id)
     try:
         result = claim_achievement_for_pet(db, pet, payload.achievement_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ActionResponse(
+        state=PetStateOut(**serialize_pet_state(result.pet)),
+        event=EventLogOut(
+            id=result.event.id,
+            action=result.event.action,
+            payload=result.event.payload,
+            created_at=result.event.created_at,
+        ),
+        reward=_to_reward_out(result.reward),
+        daily=_to_daily_out(get_daily_state(db, user_id)),
+        notifications=result.notifications,
+    )
+
+
+@router.get("/quests", response_model=list[QuestOut])
+def quests(db: DbDep, user_id: UserDep) -> list[QuestOut]:
+    rows = get_quests_state(db, user_id)
+    return [QuestOut(**row) for row in rows]
+
+
+@router.post("/quests/claim", response_model=ActionResponse)
+def quests_claim(payload: QuestClaimRequest, db: DbDep, user_id: UserDep) -> ActionResponse:
+    pet = ensure_pet_state(db, user_id)
+    try:
+        result = claim_quest_step_for_pet(db, pet, payload.quest_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

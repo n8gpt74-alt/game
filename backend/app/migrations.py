@@ -15,6 +15,11 @@ APP_TABLES = {
     "rewards",
     "daily_progress",
     "notification_settings",
+    "streak_states",
+    "live_events",
+    "event_progress",
+    "achievement_progress",
+    "quest_progress",
 }
 
 

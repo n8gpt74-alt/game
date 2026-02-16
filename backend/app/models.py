@@ -199,3 +199,23 @@ class AchievementProgress(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
+
+
+class QuestProgress(Base):
+    __tablename__ = "quest_progress"
+    __table_args__ = (UniqueConstraint("user_id", "quest_key", name="uq_quest_progress_user_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    quest_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    current_step_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    step_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    step_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    step_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    quest_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )

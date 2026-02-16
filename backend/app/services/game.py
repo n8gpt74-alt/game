@@ -34,6 +34,8 @@ from app.services.gamification import (
     update_login_streak,
 )
 
+from app.services.quests import apply_quest_metric, claim_current_step, list_quests
+
 
 
 settings = get_settings()
@@ -289,12 +291,17 @@ def _update_daily_progress_for_action(db: Session, pet: PetState, action: str) -
     return _build_daily_payload(progress), notifications
 
 
-def _apply_live_event_points_for_action(db: Session, user_id: int, action: str, notifications: list[str]) -> None:
+def _apply_live_event_points_for_action(db: Session, user_id: int, action: str, notifications: list[str]) -> int:
     points = EVENT_POINTS_BY_ACTION.get(action, 0)
+    if points <= 0:
+        return 0
     update = add_event_points(db, user_id, points)
-    if update and update.completed_now:
-        notifications.append("Событие завершено! Заберите награду в разделе «События»")
+    if update is None:
+        return 0
 
+    if update.completed_now:
+        notifications.append("Событие завершено! Заберите награду в разделе «События»")
+    return points
 
 def _apply_achievement_delta(db: Session, user_id: int, achievement_key: str, delta: int, notifications: list[str]) -> None:
     if delta <= 0:
@@ -353,12 +360,15 @@ def execute_action(db: Session, pet: PetState, action: str) -> ActionExecution:
     if lonely:
         notifications.append("Питомец скучает")
 
-    _apply_live_event_points_for_action(db, pet.user_id, action, notifications)
+    event_points = _apply_live_event_points_for_action(db, pet.user_id, action, notifications)
     if action == "feed":
         _apply_achievement_delta(db, pet.user_id, "feed_count_25", 1, notifications)
     if action == "play":
         _apply_achievement_delta(db, pet.user_id, "play_count_25", 1, notifications)
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
+    notifications.extend(apply_quest_metric(db, pet.user_id, f"action:{action}", 1))
+    if event_points:
+        notifications.extend(apply_quest_metric(db, pet.user_id, "event_points", event_points))
 
 
     db.add(pet)
@@ -456,6 +466,11 @@ def execute_minigame(
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
 
 
+    notifications.extend(apply_quest_metric(db, pet.user_id, "minigame", 1))
+    if update is not None:
+        notifications.extend(apply_quest_metric(db, pet.user_id, "event_points", points))
+
+
     event = _record_event(
         db,
         pet.user_id,
@@ -496,6 +511,10 @@ def get_active_event(db: Session, user_id: int):
 
 def get_achievements_state(db: Session, user_id: int):
     return list_achievements(db, user_id)
+
+
+def get_quests_state(db: Session, user_id: int) -> list[dict[str, object]]:
+    return list_quests(db, user_id)
 
 
 def claim_active_event_for_pet(db: Session, pet: PetState) -> ActionExecution:
@@ -563,6 +582,46 @@ def claim_achievement_for_pet(db: Session, pet: PetState, achievement_key: str) 
         "награда_достижения",
         {
             "achievement_key": achievement_key,
+            "reward": reward.__dict__,
+            "stats": serialize_pet_state_for_event(pet),
+        },
+    )
+    return ActionExecution(pet=pet, event=event, reward=reward, notifications=notifications)
+
+
+def claim_quest_step_for_pet(db: Session, pet: PetState, quest_key: str) -> ActionExecution:
+    claim = claim_current_step(db, pet.user_id, quest_key)
+
+    reward = _apply_progress_for_pet(
+        db,
+        pet,
+        base_xp=claim.reward_xp,
+        base_coins=claim.reward_coins,
+    )
+
+    notifications = [
+        f"Награда квеста получена: {claim.step_title} (+{claim.reward_coins} монет, +{claim.reward_xp} XP)"
+    ]
+    if claim.quest_completed_now:
+        notifications.append("Квест завершён!")
+    if reward.level_up:
+        notifications.append("Новый уровень!")
+
+    _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
+
+    pet.last_active_at = _now()
+    _update_behavior_state(pet)
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+
+    event = _record_event(
+        db,
+        pet.user_id,
+        "награда_квеста",
+        {
+            "quest_key": claim.quest_key,
+            "step_index": claim.step_index,
             "reward": reward.__dict__,
             "stats": serialize_pet_state_for_event(pet),
         },
@@ -681,6 +740,8 @@ def buy_shop_item(db: Session, pet: PetState, item_key: str) -> ShopExecution:
     _upsert_inventory(db, pet.user_id, item.item_key, 1)
     pet.last_active_at = _now()
     _update_behavior_state(pet)
+
+    apply_quest_metric(db, pet.user_id, "shop_buy", 1)
     db.add(pet)
     db.commit()
     db.refresh(pet)
@@ -768,12 +829,16 @@ def use_item(db: Session, pet: PetState, item_key: str) -> ActionExecution:
         notifications.append("Питомец скучает")
     
     mapped_action = _action_for_item_category(category)
-    _apply_live_event_points_for_action(db, pet.user_id, mapped_action, notifications)
+    event_points = _apply_live_event_points_for_action(db, pet.user_id, mapped_action, notifications)
     if mapped_action == "feed":
         _apply_achievement_delta(db, pet.user_id, "feed_count_25", 1, notifications)
     if mapped_action == "play":
         _apply_achievement_delta(db, pet.user_id, "play_count_25", 1, notifications)
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
+    notifications.extend(apply_quest_metric(db, pet.user_id, "use_item", 1))
+    notifications.extend(apply_quest_metric(db, pet.user_id, f"action:{mapped_action}", 1))
+    if event_points:
+        notifications.extend(apply_quest_metric(db, pet.user_id, "event_points", event_points))
 
 
     # Получаем название предмета

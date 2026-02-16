@@ -156,3 +156,28 @@ class ShopBuyResponse(BaseModel):
     event: EventLogOut
     item_key: str
     price: int
+
+
+class QuestStepOut(BaseModel):
+    index: int
+    title: str
+    description: str
+    target: int
+    reward_coins: int
+    reward_xp: int
+    progress: int
+    completed: bool
+    claimed: bool
+    locked: bool
+
+
+class QuestOut(BaseModel):
+    quest_key: str
+    title: str
+    description: str
+    completed: bool
+    steps: list[QuestStepOut]
+
+
+class QuestClaimRequest(BaseModel):
+    quest_key: str
