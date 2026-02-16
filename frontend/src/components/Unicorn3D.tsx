@@ -9,6 +9,8 @@ export type РезультатМиниИгры3D = {
   xp: number;
 };
 
+export type Настроение3D = "calm" | "happy" | "hungry" | "dirty" | "tired" | "sick" | "sad";
+
 export interface Unicorn3DHandle {
   playAction: (actionName: ТипДействия) => Promise<void>;
   evolveTo: (stage: СтадияПитомца) => Promise<void>;
@@ -19,6 +21,7 @@ type Props = {
   stage: СтадияПитомца;
   className?: string;
   activeCosmetics?: string[];
+  mood?: Настроение3D;
   roomTheme?: string | null;
 };
 

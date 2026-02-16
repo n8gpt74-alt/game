@@ -747,12 +747,31 @@ body {
   gap: 8px;
 }
 
-.shop-item div {
+.shop-item-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.shop-item-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  background: #eef4ff;
+  border: 1px solid #d7e4fb;
+  box-shadow: inset 0 -4px 8px rgba(103, 132, 198, 0.12);
+}
+
+.shop-item-info {
   display: grid;
   gap: 2px;
 }
 
-.shop-item span {
+.shop-item-info span {
   color: var(--text-soft);
   font-size: 12px;
 }

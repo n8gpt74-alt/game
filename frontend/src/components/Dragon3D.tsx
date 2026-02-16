@@ -32,6 +32,7 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { СтадияПитомца, ТипДействия } from "../types";
+import type { Настроение3D } from "./Unicorn3D";
 import { createParticlesSystem, type ParticleSystem } from "./particlesSystem";
 import { visualEffects } from "../effects";
 
@@ -626,6 +627,7 @@ type Props = {
   className?: string;
   activeCosmetics?: string[];
   roomTheme?: string | null;
+  mood?: Настроение3D;
 };
 
 function очиститьГруппу(root: Group): void {
@@ -651,7 +653,7 @@ function очиститьГруппу(root: Group): void {
 }
 
 export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
-  { stage, className, activeCosmetics = [], roomTheme = null },
+  { stage, className, activeCosmetics = [], roomTheme = null, mood = "calm" },
   ref
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -691,6 +693,7 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
   const pointerRef = useRef(new Vector2());
   const actionRunningRef = useRef(false);
   const idleWeightRef = useRef(1);
+  const moodRef = useRef<Настроение3D>(mood);
   const lookStateRef = useRef({
     yaw: 0,
     pitch: 0,
@@ -723,6 +726,10 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
   useEffect(() => {
     applyThemeRef.current(roomTheme);
   }, [roomTheme]);
+
+  useEffect(() => {
+    moodRef.current = mood;
+  }, [mood]);
 
   useEffect(() => {
     const stageRoot = stageRootRef.current;
@@ -1130,14 +1137,29 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
         // Обновление визуальных эффектов
         visualEffects.update(dt);
 
-        const idleTarget = actionRunningRef.current ? 0.22 : 1;
+        const moodState = moodRef.current;
+        const moodMotionScale =
+          moodState === "happy"
+            ? 1.12
+            : moodState === "tired"
+              ? 0.78
+              : moodState === "sick"
+                ? 0.72
+                : moodState === "sad"
+                  ? 0.84
+                  : moodState === "hungry"
+                    ? 0.9
+                    : moodState === "dirty"
+                      ? 0.88
+                      : 1;
+
+        const idleTarget = actionRunningRef.current ? 0.22 : moodMotionScale;
         idleWeightRef.current = MathUtils.lerp(idleWeightRef.current, idleTarget, clamp(dt * 6, 0, 1));
         const idleFactor = idleWeightRef.current;
-
+        const moodLightScale = moodState === "happy" ? 1.12 : moodState === "tired" || moodState === "sick" ? 0.82 : 1;
         if (hemiLightRef.current) {
-          hemiLightRef.current.intensity = 0.55 + Math.sin(t * 0.3) * 0.05;
+          hemiLightRef.current.intensity = (0.55 + Math.sin(t * 0.3) * 0.05) * moodLightScale;
         }
-
         if (movingLightRef.current) {
           const center = new Vector3();
           model.getWorldPosition(center);
@@ -1148,33 +1170,42 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
             center.z + Math.sin(orbit) * 0.9
           );
           const pulse = (Math.sin(t * 1.2) + 1) * 0.5;
-          movingLightRef.current.intensity = MathUtils.lerp(CONFIG.lights.movingMin, CONFIG.lights.movingMax, pulse);
+          movingLightRef.current.intensity = MathUtils.lerp(CONFIG.lights.movingMin, CONFIG.lights.movingMax, pulse) * moodLightScale;
         }
-
         const look = lookStateRef.current;
+        const lookYawRange = moodState === "happy" ? 0.18 : moodState === "tired" || moodState === "sick" ? 0.1 : 0.15;
+        const lookPitchRange = moodState === "happy" ? 0.07 : moodState === "tired" || moodState === "sick" ? 0.04 : 0.06;
+        const lookRetargetMin = moodState === "happy" ? 2100 : moodState === "tired" || moodState === "sick" ? 3400 : 2500;
+        const lookRetargetMax = moodState === "happy" ? 4200 : moodState === "tired" || moodState === "sick" ? 6200 : 5000;
         if (now >= look.nextAt && !actionRunningRef.current) {
-          look.targetYaw = randomRange(-0.15, 0.15);
-          look.targetPitch = randomRange(-0.06, 0.05);
-          look.nextAt = now + randomRange(2500, 5000);
+          look.targetYaw = randomRange(-lookYawRange, lookYawRange);
+          look.targetPitch = randomRange(-lookPitchRange, lookPitchRange);
+          look.nextAt = now + randomRange(lookRetargetMin, lookRetargetMax);
         }
         look.yaw = MathUtils.lerp(look.yaw, look.targetYaw, clamp(dt * 2.3, 0, 1));
         look.pitch = MathUtils.lerp(look.pitch, look.targetPitch, clamp(dt * 2.1, 0, 1));
-
         const jump = jumpStateRef.current;
-        if (!jump.active && now >= jump.nextAt && !actionRunningRef.current && !miniGameRef.current) {
+        const moodAllowsJump = moodState !== "sick" && moodState !== "tired";
+        const jumpMin = moodState === "happy" ? 7600 : moodState === "sad" ? 11000 : 10000;
+        const jumpMax = moodState === "happy" ? 11800 : moodState === "sad" ? 17000 : 15000;
+        if (!jump.active && now >= jump.nextAt && !actionRunningRef.current && !miniGameRef.current && moodAllowsJump) {
           jump.active = true;
           jump.startAt = now;
           jump.durationMs = randomRange(690, 820);
-          jump.nextAt = now + randomRange(10_000, 15_000);
+          jump.nextAt = now + randomRange(jumpMin, jumpMax);
         }
         let joyJump = 0;
         if (jump.active) {
           const pJump = clamp((now - jump.startAt) / jump.durationMs, 0, 1);
-          joyJump = Math.sin(pJump * Math.PI) * 0.09;
+          const moodJumpScale = moodState === "happy" ? 1.2 : moodState === "sad" ? 0.75 : 1;
+          joyJump = Math.sin(pJump * Math.PI) * 0.09 * moodJumpScale;
           if (pJump >= 1) {
             jump.active = false;
           }
         }
+
+        const moodBlinkMin = moodState === "happy" ? 2200 : moodState === "sick" ? 1700 : moodState === "tired" ? 1900 : 2500;
+        const moodBlinkMax = moodState === "happy" ? 4700 : moodState === "sick" ? 3200 : moodState === "tired" ? 3600 : 5500;
         if (!blink.active && now >= blink.nextAt) {
           blink.active = true;
           blink.startedAt = now;
@@ -1185,7 +1216,8 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
           const p = clamp((now - blink.startedAt) / blink.durationMs, 0, 1);
           const close = p < 0.5 ? p / 0.5 : 1 - (p - 0.5) / 0.5;
           blink.amount = Math.max(0, close);
-          if (blinkMaterialRef.current) blinkMaterialRef.current.opacity = blink.amount * 0.7;
+          const moodBlinkOpacity = moodState === "sick" || moodState === "tired" ? 0.85 : 0.7;
+          if (blinkMaterialRef.current) blinkMaterialRef.current.opacity = blink.amount * moodBlinkOpacity;
           if (p >= 1) {
             blink.active = false;
             blink.amount = 0;
@@ -1195,17 +1227,21 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
               blink.doublePending = false;
               blink.nextAt = now + randomRange(90, 140);
             } else {
-              blink.nextAt = now + (boost ? randomRange(1200, 2400) : randomRange(2500, 5500));
+              blink.nextAt = now + (boost ? randomRange(1200, 2200) : randomRange(moodBlinkMin, moodBlinkMax));
             }
           }
         }
 
-        model.position.y = modelBaseYRef.current + Math.sin(t * 1.45) * 0.009 * idleFactor + joyJump;
-        model.rotation.x = Math.sin(t * 1.15) * 0.012 * idleFactor + look.pitch * 0.32;
-        model.rotation.y = Math.sin(t * 0.62) * 0.055 * idleFactor + look.yaw;
-        model.rotation.z = Math.sin(t * 1.9) * 0.01 * idleFactor;
+        const moodYOffset = moodState === "tired" ? -0.012 : moodState === "sick" ? -0.016 : moodState === "sad" ? -0.007 : 0;
+        const moodBobScale = moodState === "happy" ? 1.15 : moodState === "tired" || moodState === "sick" ? 0.72 : moodState === "sad" ? 0.85 : 1;
+        model.position.y = modelBaseYRef.current + Math.sin(t * 1.45) * 0.009 * idleFactor * moodBobScale + joyJump + moodYOffset;
+        model.rotation.x = Math.sin(t * 1.15) * 0.012 * idleFactor * moodBobScale + look.pitch * 0.32;
+        model.rotation.y = Math.sin(t * 0.62) * 0.055 * idleFactor * moodBobScale + look.yaw;
+        model.rotation.z = Math.sin(t * 1.9) * 0.01 * idleFactor * moodBobScale;
         const baseScale = modelBaseScaleRef.current;
-        const breathWave = Math.sin(t * 2.2) * 0.014 * idleFactor;
+        const breathFrequency = moodState === "tired" || moodState === "sick" ? 1.7 : 2.2;
+        const breathMoodScale = moodState === "happy" ? 1.1 : moodState === "sick" ? 0.7 : 1;
+        const breathWave = Math.sin(t * breathFrequency) * 0.014 * idleFactor * breathMoodScale;
         model.scale.set(
           baseScale.x * (1 + breathWave),
           baseScale.y,

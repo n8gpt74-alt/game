@@ -24,7 +24,7 @@ import { FxOverlay, type FxName, type FxTrigger } from "./components/FxOverlay";
 import { ItemAnimation } from "./components/ItemAnimation";
 import { ItemSelector } from "./components/ItemSelector";
 import { TopStats } from "./components/TopStats";
-import { Unicorn3D, type Unicorn3DHandle, type ВозрастМиниИгры } from "./components/Unicorn3D";
+import { Unicorn3D, type Unicorn3DHandle, type ВозрастМиниИгры, type Настроение3D } from "./components/Unicorn3D";
 import { применитьСостояниеСервера, проверитьПовышениеУровня, выполнитьДействие } from "./game/контроллер";
 import { естьНевзятыеНаграды, процентВыполненияЗаданий } from "./game/задания";
 import { сгруппироватьКаталог } from "./game/магазин";
@@ -210,6 +210,23 @@ function обновитьИнвентарь(inventory: ПредметИнвен�
     .sort((left, right) => left.item_key.localeCompare(right.item_key));
 }
 
+function иконкаТовараМагазина(itemKey: string, title: string): string {
+  const firstToken = title.trim().split(/\s+/, 1)[0] ?? "";
+  if (firstToken && !/^[A-Za-zА-Яа-яЁё0-9]+$/.test(firstToken)) {
+    return firstToken;
+  }
+
+  if (itemKey.startsWith("food_")) return "🍎";
+  if (itemKey.startsWith("medicine_")) return "🩹";
+  if (itemKey.startsWith("wash_")) return "🧼";
+  if (itemKey.startsWith("toy_")) return "⚽";
+  if (itemKey.startsWith("decor_")) return "⭐";
+  if (itemKey.startsWith("horn_")) return "✨";
+  if (itemKey.startsWith("theme_")) return "🏠";
+  if (itemKey.startsWith("acc_")) return "🧣";
+  return "📦";
+}
+
 function мягкоеПредупреждение(state: СостояниеПитомца | null): string {
   if (!state) return "";
   if (state.hunger < 30) return `${PET.species} ${PET.name} проголодался`;
@@ -217,6 +234,17 @@ function мягкоеПредупреждение(state: СостояниеПи�
   if (state.hygiene < 30) return `${PET.name}: пора мыться`;
   if (state.health < 40) return `${PET.name}: нужно лечение`;
   return "";
+}
+
+function настроениеДля3D(state: СостояниеПитомца | null): Настроение3D {
+  if (!state) return "calm";
+  if (state.health < 35) return "sick";
+  if (state.energy < 25) return "tired";
+  if (state.hunger < 35) return "hungry";
+  if (state.hygiene < 35) return "dirty";
+  if (state.happiness < 35) return "sad";
+  if (state.happiness > 80 && state.energy > 60) return "happy";
+  return "calm";
 }
 
 function названиеСобытия(action: string): string {
@@ -1172,6 +1200,7 @@ export default function App() {
   );
 
   const warning = useMemo(() => мягкоеПредупреждение(state), [state]);
+  const dragonMood = useMemo(() => настроениеДля3D(state), [state]);
   const activeRoomTheme = useMemo(() => equippedItems.find((key) => key.startsWith("theme_")) ?? null, [equippedItems]);
   const inventoryMap = useMemo(() => {
     return inventory.reduce<Record<string, number>>((acc, item) => {
@@ -1255,6 +1284,7 @@ export default function App() {
             className="unicorn-3d"
             activeCosmetics={equippedItems}
             roomTheme={activeRoomTheme}
+            mood={dragonMood}
           />
           <FxOverlay trigger={fxTrigger} />
           {animatingItems.map(item => (
@@ -1362,12 +1392,15 @@ export default function App() {
                   <h4>{section}</h4>
                   {items.map((item) => (
                     <article key={item.item_key} className="shop-item">
-                      <div>
-                        <strong>{item.title}</strong>
-                        <span>
-                          Цена: {item.price} • Уровень: {item.level_required}
-                        </span>
-                        <span>В инвентаре: {inventoryMap[item.item_key] ?? 0}</span>
+                      <div className="shop-item-main">
+                        <div className="shop-item-icon" aria-hidden="true">{иконкаТовараМагазина(item.item_key, item.title)}</div>
+                        <div className="shop-item-info">
+                          <strong>{item.title}</strong>
+                          <span>
+                            Цена: {item.price} • Уровень: {item.level_required}
+                          </span>
+                          <span>В инвентаре: {inventoryMap[item.item_key] ?? 0}</span>
+                        </div>
                       </div>
                       <div className="shop-item-actions">
                         <button
