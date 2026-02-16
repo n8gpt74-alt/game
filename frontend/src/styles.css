@@ -683,8 +683,16 @@ body {
   gap: 8px;
 }
 
+.achievement-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+
 .sheet-actions button,
-.shop-item button {
+.shop-item button,
+.achievement-actions button {
   border: none;
   border-radius: 12px;
   min-height: 44px;
@@ -695,7 +703,8 @@ body {
 }
 
 .sheet-actions button:disabled,
-.shop-item button:disabled {
+.shop-item button:disabled,
+.achievement-actions button:disabled {
   opacity: 0.5;
 }
 
@@ -958,7 +967,7 @@ body {
 .item-flying {
   position: absolute;
   font-size: 64px;
-  animation: flyToCenter 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: flyToCenter 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
 }
 
@@ -1000,23 +1009,28 @@ body {
 
 /* Анимация для разных типов предметов */
 .item-flying.food {
-  animation: flyToCenter 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
-             rotate 1.2s ease-in-out;
+  animation: flyToCenter 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+             rotate 1.8s ease-in-out;
 }
 
 .item-flying.medicine {
-  animation: flyToCenter 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+  animation: flyToCenter 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
              pulse 0.3s ease-in-out 4;
 }
 
 .item-flying.wash {
-  animation: flyToCenter 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+  animation: flyToCenter 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
              wobble 0.4s ease-in-out 3;
 }
 
 .item-flying.toy {
-  animation: flyToCenter 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+  animation: flyToCenter 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
              bounce 0.25s ease-in-out 5;
+}
+
+.item-flying.reward {
+  animation: flyToCenter 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) forwards,
+             pulse 0.45s ease-in-out 4;
 }
 
 @keyframes rotate {
@@ -1190,6 +1204,44 @@ body {
   100% {
     opacity: 0;
     transform: translateY(-90px) scale(0.6) rotate(0deg);
+  }
+}
+
+/* Монеты */
+.item-effect.coins::before,
+.item-effect.coins::after {
+  content: "💰";
+  position: absolute;
+  font-size: 34px;
+  animation: coinBurst 1.4s ease-out forwards;
+}
+
+.item-effect.coins::before {
+  left: -70px;
+  animation-delay: 0.1s;
+}
+
+.item-effect.coins::after {
+  right: -70px;
+  animation-delay: 0.35s;
+}
+
+@keyframes coinBurst {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5) rotate(0deg);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-25px) scale(1.15) rotate(8deg);
+  }
+  70% {
+    opacity: 0.95;
+    transform: translateY(-55px) scale(1) rotate(-6deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(0.65) rotate(0deg);
   }
 }
 

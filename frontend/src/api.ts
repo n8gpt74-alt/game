@@ -7,8 +7,11 @@ import type {
   ЗапросРезультатаМиниИгры,
   Награда,
   ПредметИнвентаря,
+  СостояниеДостижения,
   СостояниеЗаданий,
   СостояниеПитомца,
+  СостояниеСерии,
+  СостояниеСобытия,
   ТипДействия,
   ТоварМагазина
 } from "./types";
@@ -118,6 +121,9 @@ type ЛокальноеХранилище = {
   history: ЗаписьСобытия[];
   daily: СостояниеЗаданий;
   inventory: ПредметИнвентаря[];
+  streak: СостояниеСерии;
+  activeEvent: СостояниеСобытия;
+  achievementProgress: Record<string, { progress: number; claimed: boolean }>;
   nextEventId: number;
 };
 
@@ -160,8 +166,209 @@ const localStore: ЛокальноеХранилище = {
     { item_key: "medicine_bandage", quantity: 3 },
     { item_key: "toy_ball", quantity: 3 }
   ],
+  streak: { current: 0, best: 0, last_claim_date: null },
+  activeEvent: {
+    event_key: "spring_festival_2026",
+    title: "Весенний фестиваль",
+    description: "Наберите очки активности и получите редкую награду",
+    target_points: 40,
+    progress_points: 0,
+    reward_coins: 300,
+    reward_xp: 120,
+    started_at: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+    ends_at: new Date("2027-01-01T00:00:00.000Z").toISOString(),
+    completed: false,
+    claimed: false
+  },
+  achievementProgress: {},
   nextEventId: 1
 };
+
+function resetLocalFallbackStore(): void {
+  localStore.state = создатьЛокальныйState();
+  localStore.history = [];
+  localStore.daily = {
+    tasks: DEFAULT_DAILY_TASKS.map((task) => ({ ...task })),
+    login_bonus_claimed: false,
+    chest_claimed: false,
+    all_completed: false
+  };
+  localStore.inventory = [
+    { item_key: "food_apple", quantity: 8 },
+    { item_key: "food_carrot", quantity: 5 },
+    { item_key: "wash_soap", quantity: 5 },
+    { item_key: "medicine_bandage", quantity: 3 },
+    { item_key: "toy_ball", quantity: 3 }
+  ];
+  localStore.streak = { current: 0, best: 0, last_claim_date: null };
+  localStore.activeEvent = {
+    event_key: "spring_festival_2026",
+    title: "Весенний фестиваль",
+    description: "Наберите очки активности и получите редкую награду",
+    target_points: 40,
+    progress_points: 0,
+    reward_coins: 300,
+    reward_xp: 120,
+    started_at: new Date("2026-01-01T00:00:00.000Z").toISOString(),
+    ends_at: new Date("2027-01-01T00:00:00.000Z").toISOString(),
+    completed: false,
+    claimed: false
+  };
+  localStore.achievementProgress = {};
+  localStore.nextEventId = 1;
+}
+
+export function гидратироватьЛокальныйFallback(
+  snapshot: {
+    state: СостояниеПитомца | null;
+    history: ЗаписьСобытия[];
+    daily: СостояниеЗаданий | null;
+    inventory: ПредметИнвентаря[];
+    streak: СостояниеСерии | null;
+    activeEvent: СостояниеСобытия | null;
+    achievements: СостояниеДостижения[];
+  } | null
+): void {
+  resetLocalFallbackStore();
+
+  if (!snapshot?.state) return;
+
+  localStore.state = { ...snapshot.state };
+  localStore.history = Array.isArray(snapshot.history) ? snapshot.history.map((row) => ({ ...row })) : [];
+  if (snapshot.daily) {
+    localStore.daily = { ...snapshot.daily, tasks: snapshot.daily.tasks.map((task) => ({ ...task })) };
+  }
+  localStore.inventory = Array.isArray(snapshot.inventory)
+    ? snapshot.inventory.map((row) => ({ ...row }))
+    : [];
+
+  if (snapshot.streak) {
+    localStore.streak = { ...snapshot.streak };
+  }
+  if (snapshot.activeEvent) {
+    localStore.activeEvent = { ...snapshot.activeEvent };
+  }
+
+  localStore.achievementProgress = {};
+  for (const row of Array.isArray(snapshot.achievements) ? snapshot.achievements : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = (row as СостояниеДостижения).achievement_key;
+    if (!key || !(key in ACHIEVEMENT_DEFS)) continue;
+    localStore.achievementProgress[key] = {
+      progress: Math.max(0, (row as СостояниеДостижения).progress ?? 0),
+      claimed: Boolean((row as СостояниеДостижения).claimed)
+    };
+  }
+
+  const maxId = localStore.history.reduce((max, row) => {
+    if (typeof row.id !== "number") return max;
+    return Math.max(max, row.id);
+  }, 0);
+  localStore.nextEventId = maxId + 1;
+}
+
+
+function dateKeyNow(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function streakBonusFor(streak: number): { coins: number; xp: number; milestone: number | null } {
+  if (streak >= 30) return { coins: 80, xp: 30, milestone: 30 };
+  if (streak >= 14) return { coins: 45, xp: 18, milestone: 14 };
+  if (streak >= 7) return { coins: 25, xp: 10, milestone: 7 };
+  if (streak >= 3) return { coins: 10, xp: 4, milestone: 3 };
+  return { coins: 0, xp: 0, milestone: null };
+}
+
+const EVENT_POINTS_BY_ACTION: Record<ТипДействия, number> = {
+  feed: 1,
+  wash: 1,
+  play: 2,
+  heal: 1,
+  chat: 1,
+  sleep: 3,
+  clean: 1
+};
+
+type AchievementDef = {
+  title: string;
+  description: string;
+  target: number;
+  reward_coins: number;
+  reward_xp: number;
+};
+
+const ACHIEVEMENT_DEFS: Record<string, AchievementDef> = {
+  feed_count_25: { title: "Заботливый кормилец", description: "Покормить питомца 25 раз", target: 25, reward_coins: 120, reward_xp: 50 },
+  play_count_25: { title: "Друг по играм", description: "Поиграть с питомцем 25 раз", target: 25, reward_coins: 140, reward_xp: 60 },
+  minigame_count_20: { title: "Мини-игроман", description: "Пройти 20 мини-игр", target: 20, reward_coins: 180, reward_xp: 80 },
+  coins_earned_1000: { title: "Копилка", description: "Заработать 1000 монет", target: 1000, reward_coins: 250, reward_xp: 90 },
+  streak_best_7: { title: "Неделя вместе", description: "Поддерживать серию входов 7 дней", target: 7, reward_coins: 220, reward_xp: 100 },
+  streak_best_30: { title: "Легенда заботы", description: "Поддерживать серию входов 30 дней", target: 30, reward_coins: 700, reward_xp: 250 }
+};
+
+function ensureAchievementRow(achievementKey: string): { progress: number; claimed: boolean } {
+  const existing = localStore.achievementProgress[achievementKey];
+  if (existing) return existing;
+  const row = { progress: 0, claimed: false };
+  localStore.achievementProgress[achievementKey] = row;
+  return row;
+}
+
+function achievementState(achievementKey: string): СостояниеДостижения {
+  const def = ACHIEVEMENT_DEFS[achievementKey];
+  const row = ensureAchievementRow(achievementKey);
+  const completed = row.progress >= def.target;
+  return {
+    achievement_key: achievementKey,
+    title: def.title,
+    description: def.description,
+    target: def.target,
+    progress: row.progress,
+    reward_coins: def.reward_coins,
+    reward_xp: def.reward_xp,
+    completed,
+    claimed: row.claimed
+  };
+}
+
+function listAchievementStates(): СостояниеДостижения[] {
+  return Object.keys(ACHIEVEMENT_DEFS).map((key) => achievementState(key));
+}
+
+function addAchievementProgressLocal(achievementKey: string, delta: number, notifications: string[]): void {
+  if (delta <= 0) return;
+  const def = ACHIEVEMENT_DEFS[achievementKey];
+  if (!def) return;
+  const row = ensureAchievementRow(achievementKey);
+  const before = row.progress;
+  row.progress += delta;
+  if (!row.claimed && before < def.target && row.progress >= def.target) {
+    notifications.push(`Достижение выполнено: ${def.title}`);
+  }
+}
+
+function setAchievementProgressMaxLocal(achievementKey: string, value: number, notifications: string[]): void {
+  const def = ACHIEVEMENT_DEFS[achievementKey];
+  if (!def) return;
+  const row = ensureAchievementRow(achievementKey);
+  const before = row.progress;
+  row.progress = Math.max(row.progress, value);
+  if (!row.claimed && before < def.target && row.progress >= def.target) {
+    notifications.push(`Достижение выполнено: ${def.title}`);
+  }
+}
+
+function addEventPointsLocal(points: number, notifications: string[]): void {
+  if (points <= 0) return;
+  if (localStore.activeEvent.claimed) return;
+  const before = localStore.activeEvent.progress_points;
+  localStore.activeEvent.progress_points += points;
+  localStore.activeEvent.completed = localStore.activeEvent.progress_points >= localStore.activeEvent.target_points;
+  if (!localStore.activeEvent.claimed && before < localStore.activeEvent.target_points && localStore.activeEvent.completed) {
+    notifications.push("Событие завершено! Заберите награду в разделе «События»");
+  }
+}
 
 function isFetchLikeError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -294,6 +501,11 @@ function localAction(action: ТипДействия): ОтветДействия
             : gainProgress(4, 1);
 
   const notifications: string[] = [];
+  addEventPointsLocal(EVENT_POINTS_BY_ACTION[action] ?? 0, notifications);
+  if (action === "feed") addAchievementProgressLocal("feed_count_25", 1, notifications);
+  if (action === "play") addAchievementProgressLocal("play_count_25", 1, notifications);
+  addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
   if (localStore.state.hunger < 30) notifications.push("Дракончик Искра проголодался");
   if (reward.level_up) notifications.push("Новый уровень!");
 
@@ -326,6 +538,10 @@ function localMiniGame(payload: ЗапросРезультатаМиниИгры
   }
   updateDailyFromMiniGame();
   const notifications: string[] = [];
+  addEventPointsLocal(success ? 2 : 1, notifications);
+  addAchievementProgressLocal("minigame_count_20", 1, notifications);
+  addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
   if (energyRecovered > 0) notifications.push(`Энергия восстановлена: +${energyRecovered}`);
   if (reward.level_up) notifications.push("Новый уровень!");
   if (localStore.daily.tasks.find((task) => task.task_key === "minigame_count")?.completed) {
@@ -384,17 +600,10 @@ function localUseItem(itemKey: string): ОтветДействия {
   if (!normalizedItemKey) {
     throw new Error(JSON.stringify({ detail: "Не указан предмет" }));
   }
-
   const inventoryItem = localStore.inventory.find((row) => row.item_key === normalizedItemKey);
   if (!inventoryItem || inventoryItem.quantity <= 0) {
     throw new Error(JSON.stringify({ detail: "У вас нет этого предмета" }));
   }
-
-  inventoryItem.quantity -= 1;
-  if (inventoryItem.quantity <= 0) {
-    localStore.inventory = localStore.inventory.filter((row) => row.item_key !== normalizedItemKey);
-  }
-
   const action: ТипДействия = normalizedItemKey.startsWith("food_")
     ? "feed"
     : normalizedItemKey.startsWith("wash_")
@@ -404,8 +613,92 @@ function localUseItem(itemKey: string): ОтветДействия {
         : normalizedItemKey.startsWith("toy_")
           ? "play"
           : "chat";
+  const itemEffects: Record<string, Partial<Record<"hunger" | "hygiene" | "happiness" | "health" | "energy" | "intelligence", number>>> = {
+    food_apple: { hunger: 15, happiness: 2 },
+    food_carrot: { hunger: 18, happiness: 3 },
+    food_candy: { hunger: 12, happiness: 8 },
+    food_icecream: { hunger: 20, happiness: 10 },
+    food_cake: { hunger: 25, happiness: 8 },
+    food_pizza: { hunger: 30, happiness: 10 },
+    food_steak: { hunger: 35, happiness: 12 },
+    food_sushi: { hunger: 40, happiness: 15 },
+    medicine_bandage: { health: 20, energy: 5 },
+    medicine_syringe: { health: 30, energy: 8 },
+    medicine_potion: { health: 35, energy: 10 },
+    medicine_elixir: { health: 50, energy: 20 },
+    wash_soap: { hygiene: 25, happiness: 3 },
+    wash_sponge: { hygiene: 28, happiness: 4 },
+    wash_toothbrush: { hygiene: 30, happiness: 5, health: 3 },
+    wash_shampoo: { hygiene: 35, happiness: 5 },
+    wash_spa: { hygiene: 50, happiness: 10, health: 5 },
+    toy_ball: { happiness: 18, energy: -8 },
+    toy_frisbee: { happiness: 22, energy: -10 },
+    toy_puzzle: { happiness: 25, energy: -5, intelligence: 1 },
+    toy_guitar: { happiness: 28, energy: -12, intelligence: 2 },
+    toy_accordion: { happiness: 30, energy: -10, intelligence: 2 },
+    toy_saxophone: { happiness: 32, energy: -15, intelligence: 3 },
+    toy_drum: { happiness: 26, energy: -14 },
+    toy_bicycle: { happiness: 35, energy: -20, health: 5 }
+  };
 
-  return localAction(action);
+  const effect = itemEffects[normalizedItemKey] ?? {};
+  const deltas: Record<string, number> = {};
+  const mutableStats: Array<"hunger" | "hygiene" | "happiness" | "health" | "energy"> = ["hunger", "hygiene", "happiness", "health", "energy"];
+
+  for (const stat of mutableStats) {
+    const delta = effect[stat] ?? 0;
+    if (delta === 0) continue;
+    const before = localStore.state[stat];
+    const after = clamp(before + delta);
+    localStore.state[stat] = after;
+    deltas[stat] = after - before;
+  }
+  inventoryItem.quantity -= 1;
+  if (inventoryItem.quantity <= 0) {
+    localStore.inventory = localStore.inventory.filter((row) => row.item_key !== normalizedItemKey);
+  }
+
+  updateDailyFromAction(action);
+
+  const baseRewardByAction: Record<ТипДействия, { xp: number; coins: number }> = {
+    feed: { xp: 5, coins: 2 },
+    wash: { xp: 5, coins: 2 },
+    play: { xp: 10, coins: 5 },
+    heal: { xp: 7, coins: 3 },
+    chat: { xp: 4, coins: 1 },
+    sleep: { xp: 10, coins: 100 },
+    clean: { xp: 3, coins: 5 }
+  };
+  const baseReward = baseRewardByAction[action];
+  const reward = gainProgress(baseReward.xp, baseReward.coins, Math.max(0, effect.intelligence ?? 0));
+
+  localStore.state.behavior_state = определитьСостояниеПитомца(localStore.state);
+
+  const notifications: string[] = [];
+  addEventPointsLocal(EVENT_POINTS_BY_ACTION[action] ?? 0, notifications);
+  if (action === "feed") addAchievementProgressLocal("feed_count_25", 1, notifications);
+  if (action === "play") addAchievementProgressLocal("play_count_25", 1, notifications);
+  addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
+  if (localStore.state.hunger < 30) notifications.push("Дракончик Искра проголодался");
+  if (reward.level_up) notifications.push("Новый уровень!");
+
+  const event = addHistory(`use_item_${action}`, {
+    item_key: normalizedItemKey,
+    deltas,
+    reward,
+    daily: localStore.daily,
+    notifications,
+    stats: localStore.state
+  });
+
+  return {
+    state: { ...localStore.state },
+    event,
+    reward,
+    daily: { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) },
+    notifications
+  };
 }
 
 function parseLimit(path: string): number {
@@ -433,9 +726,40 @@ function localFallbackRequest<T>(path: string, method: string, body: unknown): T
       throw new Error(JSON.stringify({ detail: "Бонус уже получен" }));
     }
     localStore.daily.login_bonus_claimed = true;
-    const reward = gainProgress(12, 20, 0);
-    const notifications = ["Бонус за вход получен"];
-    const event = addHistory("бонус_входа", { reward, daily: localStore.daily, notifications });
+    const today = dateKeyNow();
+    const previous = localStore.streak.last_claim_date;
+
+    if (!previous) {
+      localStore.streak.current = 1;
+    } else {
+      const prevDate = new Date(`${previous}T00:00:00.000Z`);
+      const curDate = new Date(`${today}T00:00:00.000Z`);
+      const diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / 86400000);
+      localStore.streak.current = diffDays === 1 ? localStore.streak.current + 1 : 1;
+    }
+
+    localStore.streak.best = Math.max(localStore.streak.best, localStore.streak.current);
+    localStore.streak.last_claim_date = today;
+
+    const bonus = streakBonusFor(localStore.streak.current);
+    const reward = gainProgress(12 + bonus.xp, 20 + bonus.coins, 0);
+
+    const notifications = ["Бонус за вход получен", `Серия входов: ${localStore.streak.current} дней`];
+    if (bonus.coins || bonus.xp) {
+      const parts: string[] = [];
+      if (bonus.coins) parts.push(`+${bonus.coins} монет`);
+      if (bonus.xp) parts.push(`+${bonus.xp} XP`);
+      notifications.push("Бонус серии: " + parts.join(", "));
+    }
+    if (bonus.milestone) {
+      notifications.push(`Рубеж серии: ${bonus.milestone} дней`);
+    }
+
+    setAchievementProgressMaxLocal("streak_best_7", localStore.streak.best, notifications);
+    setAchievementProgressMaxLocal("streak_best_30", localStore.streak.best, notifications);
+    addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
+    const event = addHistory("бонус_входа", { reward, daily: localStore.daily, notifications, streak: localStore.streak });
     return {
       state: { ...localStore.state },
       event,
@@ -451,6 +775,8 @@ function localFallbackRequest<T>(path: string, method: string, body: unknown): T
     localStore.daily.chest_claimed = true;
     const reward = gainProgress(30, 50, 0);
     const notifications = ["Сундук заданий открыт"];
+    addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
     const event = addHistory("сундук_дня", { reward, daily: localStore.daily, notifications });
     return {
       state: { ...localStore.state },
@@ -460,6 +786,80 @@ function localFallbackRequest<T>(path: string, method: string, body: unknown): T
       notifications
     } as T;
   }
+  if (path === "/streak" && method === "GET") {
+    return { ...localStore.streak } as T;
+  }
+  if (path === "/events/active" && method === "GET") {
+    return { ...localStore.activeEvent } as T;
+  }
+  if (path === "/events/claim" && method === "POST") {
+    if (!localStore.activeEvent.completed || localStore.activeEvent.claimed) {
+      throw new Error(JSON.stringify({ detail: "Награда события ещё недоступна" }));
+    }
+    localStore.activeEvent.claimed = true;
+    const reward = gainProgress(localStore.activeEvent.reward_xp, localStore.activeEvent.reward_coins, 0);
+    const notifications = [
+      `Награда события получена: +${localStore.activeEvent.reward_coins} монет, +${localStore.activeEvent.reward_xp} XP`
+    ];
+    if (reward.level_up) notifications.push("Новый уровень!");
+    addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
+    const event = addHistory("награда_события", {
+      event_key: localStore.activeEvent.event_key,
+      reward,
+      notifications,
+      stats: localStore.state
+    });
+    return {
+      state: { ...localStore.state },
+      event,
+      reward,
+      daily: { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) },
+      notifications
+    } as T;
+  }
+  if (path === "/achievements" && method === "GET") {
+    return listAchievementStates() as T;
+  }
+  if (path === "/achievements/claim" && method === "POST") {
+    const parsed = body as { achievement_key?: string } | undefined;
+    const achievementKey = String(parsed?.achievement_key ?? "").trim();
+    const def = ACHIEVEMENT_DEFS[achievementKey];
+    if (!def) {
+      throw new Error(JSON.stringify({ detail: "Достижение не найдено" }));
+    }
+    const state = achievementState(achievementKey);
+    if (!state.completed) {
+      throw new Error(JSON.stringify({ detail: "Награда достижения ещё недоступна" }));
+    }
+    if (state.claimed) {
+      throw new Error(JSON.stringify({ detail: "Награда достижения уже получена" }));
+    }
+
+    ensureAchievementRow(achievementKey).claimed = true;
+
+    const reward = gainProgress(def.reward_xp, def.reward_coins, 0);
+    const notifications = [
+      `Награда достижения получена: ${def.title} (+${def.reward_coins} монет, +${def.reward_xp} XP)`
+    ];
+    if (reward.level_up) notifications.push("Новый уровень!");
+    addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
+    const event = addHistory("награда_достижения", {
+      achievement_key: achievementKey,
+      reward,
+      notifications,
+      stats: localStore.state
+    });
+    return {
+      state: { ...localStore.state },
+      event,
+      reward,
+      daily: { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) },
+      notifications
+    } as T;
+  }
+
   if (path === "/shop/catalog" && method === "GET") {
     return localCatalog() as T;
   }
@@ -576,3 +976,25 @@ export function получитьИнвентарь(token: string): Promise<Пр�
 export function использоватьПредмет(token: string, itemKey: string): Promise<ОтветДействия> {
   return request<ОтветДействия>("/use-item", token, "POST", { item_key: itemKey });
 }
+
+
+export function получитьСерию(token: string): Promise<СостояниеСерии> {
+  return request<СостояниеСерии>("/streak", token);
+}
+
+export function получитьАктивноеСобытие(token: string): Promise<СостояниеСобытия | null> {
+  return request<СостояниеСобытия | null>("/events/active", token);
+}
+
+export function забратьНаградуСобытия(token: string): Promise<ОтветДействия> {
+  return request<ОтветДействия>("/events/claim", token, "POST");
+}
+
+export function получитьДостижения(token: string): Promise<СостояниеДостижения[]> {
+  return request<СостояниеДостижения[]>("/achievements", token);
+}
+
+export function забратьНаградуДостижения(token: string, achievementKey: string): Promise<ОтветДействия> {
+  return request<ОтветДействия>("/achievements/claim", token, "POST", { achievement_key: achievementKey });
+}
+

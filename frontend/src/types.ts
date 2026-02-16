@@ -117,3 +117,36 @@ export interface ПредметИнвентаря {
   item_key: string;
   quantity: number;
 }
+
+
+export interface СостояниеСерии {
+  current: number;
+  best: number;
+  last_claim_date?: string | null;
+}
+
+export interface СостояниеСобытия {
+  event_key: string;
+  title: string;
+  description: string;
+  target_points: number;
+  progress_points: number;
+  reward_coins: number;
+  reward_xp: number;
+  started_at: string;
+  ends_at: string;
+  completed: boolean;
+  claimed: boolean;
+}
+
+export interface СостояниеДостижения {
+  achievement_key: string;
+  title: string;
+  description: string;
+  target: number;
+  progress: number;
+  reward_coins: number;
+  reward_xp: number;
+  completed: boolean;
+  claimed: boolean;
+}

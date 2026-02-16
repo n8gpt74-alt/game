@@ -1,17 +1,23 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   авторизацияТелеграм,
+  выполнитьДействиеApi,
+  использоватьПредмет,
+  забратьНаградуДостижения,
+  забратьНаградуСобытия,
+  купитьТовар,
+  открытьСундукДня,
+  отправитьРезультатМиниИгры,
+  получитьАктивноеСобытие,
   получитьБонусЗаВход,
+  получитьДостижения,
   получитьЗаданияДня,
   получитьИнвентарь,
   получитьИсторию,
   получитьКаталогМагазина,
+  получитьСерию,
   получитьСостояние,
-  открытьСундукДня,
-  отправитьРезультатМиниИгры,
-  купитьТовар,
-  использоватьПредмет,
-  выполнитьДействиеApi
+  гидратироватьЛокальныйFallback
 } from "./api";
 import { ActionDock } from "./components/ActionDock";
 import { FxOverlay, type FxName, type FxTrigger } from "./components/FxOverlay";
@@ -33,13 +39,16 @@ import {
   syncTelegramViewportHeightVar
 } from "./telegram";
 import type {
+  КаталогМагазина,
   ОтветМиниИгры,
   ЗаписьСобытия,
   ЗапросРезультатаМиниИгры,
-  КаталогМагазина,
   ПредметИнвентаря,
+  СостояниеДостижения,
   СостояниеЗаданий,
   СостояниеПитомца,
+  СостояниеСерии,
+  СостояниеСобытия,
   ТипДействия
 } from "./types";
 
@@ -59,7 +68,7 @@ const ACTION_COOLDOWN_MS = {
   mini: 60_000
 } as const;
 
-type Панель = "нет" | "задания" | "магазин";
+type Панель = "нет" | "задания" | "магазин" | "события" | "достижения";
 
 function stageLabel(stageTitle: string | undefined): string {
   return stageTitle || "Малыш";
@@ -195,6 +204,9 @@ function названиеСобытия(action: string): string {
     мини_игра: "Мини-игра",
     бонус_входа: "Бонус входа",
     сундук_дня: "Сундук дня",
+    награда_события: "Награда события",
+    награда_достижения: "Награда достижения",
+
     мягкое_уведомление: "Уведомление",
     ежедневный_отчёт: "Отчёт дня"
   };
@@ -217,6 +229,10 @@ export default function App() {
   const [daily, setDaily] = useState<СостояниеЗаданий | null>(null);
   const [catalog, setCatalog] = useState<КаталогМагазина>({ items: [] });
   const [inventory, setInventory] = useState<ПредметИнвентаря[]>([]);
+  const [streak, setStreak] = useState<СостояниеСерии | null>(null);
+  const [activeEvent, setActiveEvent] = useState<СостояниеСобытия | null>(null);
+  const [achievements, setAchievements] = useState<СостояниеДостижения[]>([]);
+
   const [equippedItems, setEquippedItems] = useState<string[]>([]);
   const [isOffline, setIsOffline] = useState<boolean>(!window.navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -277,13 +293,33 @@ export default function App() {
       setDaily(snapshot.daily);
       setCatalog(snapshot.catalog);
       setInventory(snapshot.inventory);
+      setStreak(snapshot.streak);
+      setActiveEvent(snapshot.activeEvent);
+      setAchievements(snapshot.achievements);
     } else {
       setState(null);
       setHistory([]);
       setDaily(null);
       setCatalog({ items: [] });
       setInventory([]);
+      setStreak(null);
+      setActiveEvent(null);
+      setAchievements([]);
     }
+
+    гидратироватьЛокальныйFallback(
+      snapshot
+        ? {
+            state: snapshot.state,
+            history: snapshot.history,
+            daily: snapshot.daily,
+            inventory: snapshot.inventory,
+            streak: snapshot.streak,
+            activeEvent: snapshot.activeEvent,
+            achievements: snapshot.achievements
+          }
+        : null
+    );
 
     setEquippedItems(загрузитьЭкипировку(storageUserId));
 
@@ -305,7 +341,7 @@ export default function App() {
     setLocalDataHydrated(true);
   }, [storageUserId]);
 
-  useEffect(() => {
+  const сохранитьПрогрессЛокально = useCallback(() => {
     if (!storageUserId || !localDataHydrated) return;
     сохранитьЛокальныйСнимок(storageUserId, {
       state,
@@ -313,14 +349,50 @@ export default function App() {
       daily,
       catalog,
       inventory,
+      streak,
+      activeEvent,
+      achievements,
       savedAt: new Date().toISOString()
     });
-  }, [storageUserId, localDataHydrated, state, history, daily, catalog, inventory]);
+    сохранитьЭкипировку(storageUserId, equippedItems);
+    гидратироватьЛокальныйFallback({
+      state,
+      history: history.slice(0, 30),
+      daily,
+      inventory,
+      streak,
+      activeEvent,
+      achievements
+    });
+  }, [storageUserId, localDataHydrated, state, history, daily, catalog, inventory, streak, activeEvent, achievements, equippedItems]);
+
+  useEffect(() => {
+    сохранитьПрогрессЛокально();
+  }, [сохранитьПрогрессЛокально]);
 
   useEffect(() => {
     if (!storageUserId || !localDataHydrated) return;
-    сохранитьЭкипировку(storageUserId, equippedItems);
-  }, [storageUserId, localDataHydrated, equippedItems]);
+
+    const flushProgress = () => {
+      сохранитьПрогрессЛокально();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushProgress();
+      }
+    };
+
+    window.addEventListener("pagehide", flushProgress);
+    window.addEventListener("beforeunload", flushProgress);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", flushProgress);
+      window.removeEventListener("beforeunload", flushProgress);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [storageUserId, localDataHydrated, сохранитьПрогрессЛокально]);
 
   useEffect(() => {
     setEquippedItems((prev) =>
@@ -334,6 +406,14 @@ export default function App() {
   const pushFx = (effect: FxName) => {
     setFxTrigger({ id: Date.now() + Math.floor(Math.random() * 999), effect });
   };
+
+  const запуститьАнимациюПредмета = useCallback((itemKey: string, durationMs: number = 1800) => {
+    const animationId = Date.now() + Math.random();
+    setAnimatingItems(prev => [...prev, { id: animationId, itemKey }]);
+    window.setTimeout(() => {
+      setAnimatingItems(prev => prev.filter(item => item.id !== animationId));
+    }, durationMs);
+  }, []);
 
   const показатьТост = (text: string) => {
     if (!text) return;
@@ -352,10 +432,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Отслеживаем когда hunger достигает 100%
-    if (state && state.hunger >= 100) {
-      setNeedsClean(true);
-    }
+    // Отслеживаем, нужна ли уборка при переполненной сытости
+    setNeedsClean(Boolean(state && state.hunger >= 100));
   }, [state]);
 
   useEffect(() => {
@@ -413,12 +491,15 @@ export default function App() {
     const load = async () => {
       setIsSyncing(true);
       try {
-        const [stateData, historyData, dailyData, catalogData, inventoryData] = await Promise.all([
+        const [stateData, historyData, dailyData, catalogData, inventoryData, streakData, activeEventData, achievementsData] = await Promise.all([
           получитьСостояние(token),
           получитьИсторию(token),
           получитьЗаданияДня(token),
           получитьКаталогМагазина(token),
-          получитьИнвентарь(token)
+          получитьИнвентарь(token),
+          получитьСерию(token),
+          получитьАктивноеСобытие(token),
+          получитьДостижения(token)
         ]);
         if (!active) return;
         
@@ -429,6 +510,10 @@ export default function App() {
         setDaily(dailyData);
         setCatalog(catalogData);
         setInventory(inventoryData);
+        setStreak(streakData);
+        setActiveEvent(activeEventData);
+        setAchievements(achievementsData);
+
         setIsOffline(false);
         setIsSyncing(false);
         
@@ -462,6 +547,32 @@ export default function App() {
       reloadRef.current = null;
     };
   }, [token, hasLocalSnapshot]);
+
+  const refreshEventAndAchievements = useCallback(async () => {
+    if (!token) return;
+    try {
+      const [activeEventData, achievementsData] = await Promise.all([
+        получитьАктивноеСобытие(token),
+        получитьДостижения(token)
+      ]);
+      setActiveEvent(activeEventData);
+      setAchievements(achievementsData);
+    } catch {
+      // игнорируем ошибки синхронизации геймификации
+    }
+  }, [token]);
+
+  const refreshStreakAndAchievements = useCallback(async () => {
+    if (!token) return;
+    try {
+      const [streakData, achievementsData] = await Promise.all([получитьСерию(token), получитьДостижения(token)]);
+      setStreak(streakData);
+      setAchievements(achievementsData);
+    } catch {
+      // игнорируем ошибки
+    }
+  }, [token]);
+
 
   useEffect(() => {
     const onOnline = () => {
@@ -593,6 +704,8 @@ export default function App() {
       setState(normalized);
       setHistory((old) => [result.event, ...old].slice(0, 20));
       setDaily(result.daily);
+      void refreshEventAndAchievements();
+
 
       показатьТост("✨ Чисто! Сытость снизилась до 50%");
       проигратьЗвук("успех");
@@ -649,6 +762,8 @@ export default function App() {
       setState(normalized);
       setHistory((old) => [ответ.event, ...old].slice(0, 20));
       setDaily(ответ.daily);
+      void refreshEventAndAchievements();
+
       проигратьЗвук("успех");
 
       for (const text of ответ.notifications) {
@@ -696,14 +811,8 @@ export default function App() {
       unicornRef.current?.playAction(currentAction);
     }
     
-    // Показываем анимацию предмета с уникальным ID
-    const animationId = Date.now() + Math.random();
-    setAnimatingItems(prev => [...prev, { id: animationId, itemKey }]);
-    
-    // Убираем анимацию через 1.2 секунды
-    setTimeout(() => {
-      setAnimatingItems(prev => prev.filter(item => item.id !== animationId));
-    }, 1200);
+    // Показываем анимацию предмета
+    запуститьАнимациюПредмета(itemKey, 1800);
     
     // Звук в зависимости от типа предмета
     if (itemKey.startsWith("food_")) {
@@ -730,6 +839,8 @@ export default function App() {
       // Обновляем инвентарь
       const inventoryData = await получитьИнвентарь(token);
       setInventory(inventoryData);
+      void refreshEventAndAchievements();
+
       
       // Эффекты в зависимости от действия
       if (currentAction === "feed") {
@@ -802,6 +913,8 @@ export default function App() {
       setState(normalized);
       setHistory((old) => [result.event, ...old].slice(0, 20));
       setDaily(result.daily);
+      void refreshEventAndAchievements();
+
       playFx("sparkles", pushFx);
       проигратьЗвук("успех");
       показатьТост(`Мини-игра завершена: +${miniResult.xp} опыта`);
@@ -842,6 +955,8 @@ export default function App() {
       setState(withRecovery);
       setHistory((old) => [result.event, ...old].slice(0, 20));
       setDaily(result.daily);
+      void refreshEventAndAchievements();
+
       playFx("sparkles", pushFx);
       проигратьЗвук("успех");
       показатьТост(`Награда: +${result.reward.xp} опыта, +${result.reward.coins} монет`);
@@ -876,6 +991,13 @@ export default function App() {
       setState(применитьСостояниеСервера(result.state));
       setDaily(result.daily);
       setHistory((old) => [result.event, ...old].slice(0, 20));
+      void refreshStreakAndAchievements();
+
+      setPanel("нет");
+      запуститьАнимациюПредмета("reward_login_bonus", 2200);
+      playFx("sparkles", pushFx);
+      проигратьЗвук("успех");
+      показатьТост(`Бонус: +${result.reward.coins} монет, +${result.reward.xp} XP`);
       for (const text of result.notifications) {
         показатьТост(text);
       }
@@ -894,6 +1016,12 @@ export default function App() {
       setState(применитьСостояниеСервера(result.state));
       setDaily(result.daily);
       setHistory((old) => [result.event, ...old].slice(0, 20));
+      void refreshEventAndAchievements();
+
+      setPanel("нет");
+      запуститьАнимациюПредмета("reward_daily_chest", 2400);
+      проигратьЗвук("успех");
+      показатьТост(`Сундук: +${result.reward.coins} монет, +${result.reward.xp} XP`);
       playFx("flash", pushFx);
       for (const text of result.notifications) {
         показатьТост(text);
@@ -904,6 +1032,55 @@ export default function App() {
       setBusy(false);
     }
   };
+
+  const claimEventReward = async () => {
+    if (!token || busy) return;
+    setBusy(true);
+    try {
+      const result = await забратьНаградуСобытия(token);
+      setState(применитьСостояниеСервера(result.state));
+      setDaily(result.daily);
+      setHistory((old) => [result.event, ...old].slice(0, 20));
+
+      запуститьАнимациюПредмета("reward_event", 2200);
+      playFx("sparkles", pushFx);
+      проигратьЗвук("успех");
+      показатьТост(`Событие: +${result.reward.coins} монет, +${result.reward.xp} XP`);
+      for (const text of result.notifications) {
+        показатьТост(text);
+      }
+      void refreshEventAndAchievements();
+    } catch (err) {
+      setError(parseError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const claimAchievementReward = async (achievementKey: string) => {
+    if (!token || busy) return;
+    setBusy(true);
+    try {
+      const result = await забратьНаградуДостижения(token, achievementKey);
+      setState(применитьСостояниеСервера(result.state));
+      setDaily(result.daily);
+      setHistory((old) => [result.event, ...old].slice(0, 20));
+
+      запуститьАнимациюПредмета("reward_achievement", 2200);
+      playFx("sparkles", pushFx);
+      проигратьЗвук("успех");
+      показатьТост(`Достижение: +${result.reward.coins} монет, +${result.reward.xp} XP`);
+      for (const text of result.notifications) {
+        показатьТост(text);
+      }
+      void refreshEventAndAchievements();
+    } catch (err) {
+      setError(parseError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
 
   const buyItem = async (itemKey: string) => {
     if (!token || busy) return;
@@ -948,6 +1125,15 @@ export default function App() {
   const groupedCatalog = useMemo(() => сгруппироватьКаталог(catalog.items), [catalog]);
   const taskProgress = useMemo(() => процентВыполненияЗаданий(daily), [daily]);
   const hasDailyRewards = useMemo(() => естьНевзятыеНаграды(daily), [daily]);
+  const hasEventReward = useMemo(
+    () => Boolean(activeEvent && activeEvent.completed && !activeEvent.claimed),
+    [activeEvent]
+  );
+  const hasAchievementReward = useMemo(
+    () => achievements.some((row) => row.completed && !row.claimed),
+    [achievements]
+  );
+
   const warning = useMemo(() => мягкоеПредупреждение(state), [state]);
   const activeRoomTheme = useMemo(() => equippedItems.find((key) => key.startsWith("theme_")) ?? null, [equippedItems]);
   const inventoryMap = useMemo(() => {
@@ -1014,6 +1200,13 @@ export default function App() {
               <button type="button" className="meta-btn" onClick={() => setPanel(panel === "магазин" ? "нет" : "магазин")}>
                 Магазин
               </button>
+              <button type="button" className="meta-btn" onClick={() => setPanel(panel === "события" ? "нет" : "события")}>
+                События {hasEventReward ? "•" : ""}
+              </button>
+              <button type="button" className="meta-btn" onClick={() => setPanel(panel === "достижения" ? "нет" : "достижения")}>
+                Достижения {hasAchievementReward ? "•" : ""}
+              </button>
+
             </div>
           </section>
         </header>
@@ -1087,6 +1280,8 @@ export default function App() {
               </button>
             </header>
             <p className="sheet-sub">Выполнено: {taskProgress}%</p>
+            <p className="sheet-sub">Серия входов: {streak?.current ?? 0} (лучшее: {streak?.best ?? 0})</p>
+
             <div className="daily-list">
               {daily?.tasks.map((task) => (
                 <article key={task.task_key} className="daily-item">
@@ -1162,6 +1357,105 @@ export default function App() {
           </div>
         </div>
       )}
+
+
+      {panel === "события" && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true">
+          <div className="sheet-card">
+            <header className="sheet-head">
+              <h3>События</h3>
+              <button type="button" onClick={() => setPanel("нет")}>
+                Закрыть
+              </button>
+            </header>
+
+            {activeEvent ? (
+              <>
+                <p className="sheet-sub">
+                  <strong>{activeEvent.title}</strong>
+                </p>
+                <p className="sheet-sub">{activeEvent.description}</p>
+
+                <div className="daily-track">
+                  <i
+                    style={{
+                      width: `${Math.min(100, (activeEvent.progress_points / activeEvent.target_points) * 100)}%`
+                    }}
+                  />
+                </div>
+
+                <p className="sheet-sub">
+                  Прогресс: {activeEvent.progress_points}/{activeEvent.target_points}
+                </p>
+                <p className="sheet-sub">
+                  Награда: +{activeEvent.reward_coins} монет, +{activeEvent.reward_xp} XP
+                </p>
+
+                <div className="sheet-actions">
+                  <button
+                    type="button"
+                    onClick={claimEventReward}
+                    disabled={busy || !activeEvent.completed || activeEvent.claimed}
+                  >
+                    {activeEvent.claimed
+                      ? "Награда получена"
+                      : activeEvent.completed
+                        ? "Забрать награду"
+                        : "Награда недоступна"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="sheet-sub">Сейчас нет активных событий.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {panel === "достижения" && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true">
+          <div className="sheet-card">
+            <header className="sheet-head">
+              <h3>Достижения</h3>
+              <button type="button" onClick={() => setPanel("нет")}>
+                Закрыть
+              </button>
+            </header>
+
+            <div className="daily-list">
+              {achievements.map((ach) => (
+                <article key={ach.achievement_key} className="daily-item achievement-item">
+                  <div>
+                    <strong>{ach.title}</strong>
+                    <span>
+                      {ach.progress}/{ach.target}
+                    </span>
+                  </div>
+                  <p className="sheet-sub">{ach.description}</p>
+                  <div className="daily-track">
+                    <i style={{ width: `${Math.min(100, (ach.progress / ach.target) * 100)}%` }} />
+                  </div>
+                  <div className="achievement-actions">
+                    <button
+                      type="button"
+                      onClick={() => claimAchievementReward(ach.achievement_key)}
+                      disabled={busy || !ach.completed || ach.claimed}
+                    >
+                      {ach.claimed
+                        ? "Получено"
+                        : ach.completed
+                          ? `Забрать (+${ach.reward_coins}💰)`
+                          : "В процессе"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {achievements.length === 0 && <p className="sheet-sub">Пока нет достижений</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {showMiniGamePicker && (
         <div className="sheet-overlay" role="dialog" aria-modal="true">

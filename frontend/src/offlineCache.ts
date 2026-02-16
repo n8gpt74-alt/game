@@ -2,8 +2,11 @@ import type {
   КаталогМагазина,
   ЗаписьСобытия,
   ПредметИнвентаря,
+  СостояниеДостижения,
   СостояниеЗаданий,
-  СостояниеПитомца
+  СостояниеПитомца,
+  СостояниеСерии,
+  СостояниеСобытия
 } from "./types";
 
 export type ЛокальныйСнимок = {
@@ -12,6 +15,9 @@ export type ЛокальныйСнимок = {
   daily: СостояниеЗаданий | null;
   catalog: КаталогМагазина;
   inventory: ПредметИнвентаря[];
+  streak: СостояниеСерии | null;
+  activeEvent: СостояниеСобытия | null;
+  achievements: СостояниеДостижения[];
   savedAt: string;
 };
 
@@ -41,6 +47,9 @@ export function загрузитьЛокальныйСнимок(storageUserId: 
       daily: (parsed.daily as СостояниеЗаданий | null) ?? null,
       catalog: (parsed.catalog as КаталогМагазина) ?? { items: [] },
       inventory: Array.isArray(parsed.inventory) ? (parsed.inventory as ПредметИнвентаря[]) : [],
+      streak: (parsed.streak as СостояниеСерии | null) ?? null,
+      activeEvent: (parsed.activeEvent as СостояниеСобытия | null) ?? null,
+      achievements: Array.isArray(parsed.achievements) ? (parsed.achievements as СостояниеДостижения[]) : [],
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : new Date(0).toISOString()
     };
   } catch {

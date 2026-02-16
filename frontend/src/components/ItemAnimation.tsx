@@ -9,11 +9,11 @@ export function ItemAnimation({ itemKey, onComplete }: ItemAnimationProps) {
   const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
-    // Анимация длится 1.2 секунды
+    // Анимация длится 1.8 секунды
     const timer = setTimeout(() => {
       setIsAnimating(false);
       onComplete();
-    }, 1200);
+    }, 1800);
 
     return () => clearTimeout(timer);
   }, [onComplete]);
@@ -39,6 +39,7 @@ function getItemCategory(itemKey: string): string {
   if (itemKey.startsWith("medicine_")) return "medicine";
   if (itemKey.startsWith("wash_")) return "wash";
   if (itemKey.startsWith("toy_")) return "toy";
+  if (itemKey.startsWith("reward_")) return "reward";
   return "";
 }
 
@@ -58,7 +59,7 @@ function getItemEffect(itemKey: string): string | null {
     medicine_elixir: "healing",
     
     // Мытьё - пузыри
-    medicine_sponge: "bubbles",
+    wash_sponge: "bubbles",
     wash_toothbrush: "sparkles",
     wash_shampoo: "bubbles",
     wash_spa: "bubbles",
@@ -72,6 +73,13 @@ function getItemEffect(itemKey: string): string | null {
     toy_saxophone: "hearts",
     toy_drum: "hearts",
     toy_bicycle: "hearts",
+
+    // Награды дня
+    reward_login_bonus: "coins",
+    reward_daily_chest: "sparkles",
+    reward_event: "sparkles",
+    reward_achievement: "sparkles",
+
   };
   return effects[itemKey] || null;
 }
@@ -110,6 +118,13 @@ function getItemIcon(itemKey: string): string {
     toy_saxophone: "🎷",
     toy_drum: "🥁",
     toy_bicycle: "🚲",
+
+    // Награды дня
+    reward_login_bonus: "💰",
+    reward_daily_chest: "🎁",
+    reward_event: "🎉",
+    reward_achievement: "🏆",
+
   };
   return icons[itemKey] || "📦";
 }
