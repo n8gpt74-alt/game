@@ -283,23 +283,23 @@ body {
   pointer-events: none;
   display: grid;
   place-items: center;
-  animation: cinematicPulse 1.5s ease both;
+  animation: cinematicPulse 1.1s ease both;
 }
 
 .dragon-cinematic-vignette {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at center, #ffffff00 30%, #281f4e8f 100%),
-    linear-gradient(180deg, #ffffff12 0%, #190f2f66 100%);
-  filter: brightness(1.08) saturate(1.08) blur(0.6px);
+    radial-gradient(circle at center, #ffffff00 42%, #25305a4d 100%),
+    linear-gradient(180deg, #ffffff08 0%, #17325a24 100%);
+  filter: brightness(1.02) saturate(1.03) blur(0.25px);
 }
 
 .dragon-cinematic-card {
   position: relative;
   z-index: 2;
-  background: #ffffffdb;
-  border: 1px solid #dce6f7;
+  background: #fffffff0;
+  border: 1px solid #e2eaf8;
   border-radius: 18px;
   padding: 14px 18px;
   text-align: center;
@@ -790,11 +790,11 @@ body {
 @keyframes cinematicPulse {
   0% {
     opacity: 0;
-    filter: brightness(0.9) blur(1.2px);
+    filter: brightness(0.97) blur(0.6px);
   }
-  35% {
+  40% {
     opacity: 1;
-    filter: brightness(1.2) blur(0.4px);
+    filter: brightness(1.05) blur(0.15px);
   }
   100% {
     opacity: 1;

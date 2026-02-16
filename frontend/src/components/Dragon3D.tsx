@@ -1153,8 +1153,8 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
 
         const look = lookStateRef.current;
         if (now >= look.nextAt && !actionRunningRef.current) {
-          look.targetYaw = randomRange(-0.24, 0.24);
-          look.targetPitch = randomRange(-0.1, 0.08);
+          look.targetYaw = randomRange(-0.15, 0.15);
+          look.targetPitch = randomRange(-0.06, 0.05);
           look.nextAt = now + randomRange(2500, 5000);
         }
         look.yaw = MathUtils.lerp(look.yaw, look.targetYaw, clamp(dt * 2.3, 0, 1));
@@ -1170,7 +1170,7 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
         let joyJump = 0;
         if (jump.active) {
           const pJump = clamp((now - jump.startAt) / jump.durationMs, 0, 1);
-          joyJump = Math.sin(pJump * Math.PI) * 0.14;
+          joyJump = Math.sin(pJump * Math.PI) * 0.09;
           if (pJump >= 1) {
             jump.active = false;
           }
@@ -1185,7 +1185,7 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
           const p = clamp((now - blink.startedAt) / blink.durationMs, 0, 1);
           const close = p < 0.5 ? p / 0.5 : 1 - (p - 0.5) / 0.5;
           blink.amount = Math.max(0, close);
-          if (blinkMaterialRef.current) blinkMaterialRef.current.opacity = blink.amount;
+          if (blinkMaterialRef.current) blinkMaterialRef.current.opacity = blink.amount * 0.7;
           if (p >= 1) {
             blink.active = false;
             blink.amount = 0;
@@ -1200,17 +1200,16 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
           }
         }
 
-        model.position.y = modelBaseYRef.current + Math.sin(t * 1.45) * 0.012 * idleFactor + joyJump;
-        model.rotation.x = Math.sin(t * 1.15) * 0.015 * idleFactor + look.pitch * 0.4;
-        model.rotation.y = Math.sin(t * 0.62) * 0.09 * idleFactor + look.yaw;
-        model.rotation.z = Math.sin(t * 1.9) * 0.015 * idleFactor;
+        model.position.y = modelBaseYRef.current + Math.sin(t * 1.45) * 0.009 * idleFactor + joyJump;
+        model.rotation.x = Math.sin(t * 1.15) * 0.012 * idleFactor + look.pitch * 0.32;
+        model.rotation.y = Math.sin(t * 0.62) * 0.055 * idleFactor + look.yaw;
+        model.rotation.z = Math.sin(t * 1.9) * 0.01 * idleFactor;
         const baseScale = modelBaseScaleRef.current;
-        const breathWave = Math.sin(t * 2.2) * 0.02 * idleFactor;
-        const blinkScale = 1 - blink.amount * 0.08;
+        const breathWave = Math.sin(t * 2.2) * 0.014 * idleFactor;
         model.scale.set(
           baseScale.x * (1 + breathWave),
-          baseScale.y * blinkScale,
-          baseScale.z * (1 - breathWave * 0.6)
+          baseScale.y,
+          baseScale.z * (1 - breathWave * 0.4)
         );
 
         particlesRef.current?.update(dt, t);
@@ -1341,78 +1340,108 @@ export const Dragon3D = forwardRef<Dragon3DHandle, Props>(function Dragon3D(
     const startRotX = model.rotation.x;
     const startRotY = model.rotation.y;
     const startRotZ = model.rotation.z;
-    const startScale = model.scale.x;
+    const startScale = model.scale.clone();
 
     await new Promise<void>((resolve) => {
       const tick = () => {
         const t = Math.min(1, (performance.now() - start) / duration);
         const e = MathUtils.smoothstep(t, 0, 1);
-        
-        // Уникальные анимации для каждого действия
+        // Мягкие анимации без резких и неестественных рывков
         switch (actionName) {
           case "feed":
-            // Кивание головой (ест)
-            model.rotation.x = startRotX + Math.sin(e * Math.PI * 3) * 0.15;
-            model.position.y = startY + Math.sin(e * Math.PI * 3) * 0.05;
+            // Небольшое дружелюбное кивание
+            model.rotation.x = startRotX + Math.sin(e * Math.PI * 2.5) * 0.08;
+            model.position.y = startY + Math.sin(e * Math.PI * 2.5) * 0.025;
             break;
-            
           case "wash":
-            // Покачивание из стороны в сторону (моется)
-            model.rotation.z = startRotZ + Math.sin(e * Math.PI * 4) * 0.12;
-            model.rotation.y = startRotY + Math.sin(e * Math.PI * 2) * 0.08;
+            // Лёгкое покачивание корпуса
+            model.rotation.z = startRotZ + Math.sin(e * Math.PI * 3.5) * 0.07;
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 2) * 0.05;
             break;
-            
-          case "play":
-            // Прыжки и вращение (играет)
-            model.position.y = startY + Math.sin(e * Math.PI * 2) * 0.35;
-            model.rotation.y = startRotY + e * Math.PI * 2;
-            model.scale.setScalar(startScale + Math.sin(e * Math.PI * 2) * 0.05);
+
+          case "play": {
+            // Упругий подпрыг без полного вращения
+            const hop = Math.sin(e * Math.PI * 2) * 0.16;
+            model.position.y = startY + Math.max(0, hop);
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 2) * 0.28;
+            const squash = Math.sin(e * Math.PI * 2) * 0.015;
+            model.scale.set(
+              startScale.x * (1 + squash),
+              startScale.y * (1 - squash * 0.7),
+              startScale.z * (1 + squash)
+            );
             break;
-            
+          }
           case "heal":
-            // Плавное поднятие и легкое свечение (лечится)
-            model.position.y = startY + Math.sin(e * Math.PI) * 0.18;
-            model.rotation.x = startRotX + Math.sin(e * Math.PI) * 0.05;
-            model.scale.setScalar(startScale + Math.sin(e * Math.PI) * 0.03);
+            // Спокойное приподнимание
+            model.position.y = startY + Math.sin(e * Math.PI) * 0.09;
+            model.rotation.x = startRotX + Math.sin(e * Math.PI) * 0.03;
+            model.scale.set(
+              startScale.x * (1 + Math.sin(e * Math.PI) * 0.012),
+              startScale.y,
+              startScale.z * (1 + Math.sin(e * Math.PI) * 0.012)
+            );
             break;
-            
           case "chat":
-            // Быстрые повороты головы (общается)
-            model.rotation.y = startRotY + Math.sin(e * Math.PI * 5) * 0.15;
-            model.rotation.x = startRotX + Math.sin(e * Math.PI * 4) * 0.08;
+            // Короткие живые повороты головы
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 4) * 0.08;
+            model.rotation.x = startRotX + Math.sin(e * Math.PI * 3) * 0.03;
             break;
-            
           case "sleep":
-            // Медленное опускание и наклон (засыпает)
-            model.position.y = startY - e * 0.15;
-            model.rotation.z = startRotZ + e * 0.3;
-            model.scale.setScalar(startScale - e * 0.05);
+            // Мягкое засыпание
+            model.position.y = startY - e * 0.08;
+            model.rotation.z = startRotZ + e * 0.14;
+            model.scale.set(
+              startScale.x * (1 - e * 0.015),
+              startScale.y * (1 - e * 0.02),
+              startScale.z * (1 - e * 0.015)
+            );
             break;
-            
           case "clean":
-            // Быстрые движения (убирает)
-            model.rotation.y = startRotY + Math.sin(e * Math.PI * 6) * 0.2;
-            model.position.y = startY + Math.sin(e * Math.PI * 4) * 0.1;
+            // Аккуратные быстрые движения
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 5) * 0.09;
+            model.position.y = startY + Math.sin(e * Math.PI * 3.2) * 0.05;
             break;
-            
           default:
-            // Базовая анимация
-            model.rotation.y = startRotY + Math.sin(e * Math.PI * 3) * 0.13;
+            model.rotation.y = startRotY + Math.sin(e * Math.PI * 2.5) * 0.05;
         }
-        
         if (t < 1) {
           requestAnimationFrame(tick);
         } else {
-          // Возврат в исходное положение
-          model.position.y = startY;
-          model.rotation.x = startRotX;
-          model.rotation.y = startRotY;
-          model.rotation.z = startRotZ;
-          model.scale.setScalar(startScale);
           resolve();
         }
       };
       tick();
+    });
+
+    const settleStart = performance.now();
+    const settleDuration = 160;
+    const fromY = model.position.y;
+    const fromRotX = model.rotation.x;
+    const fromRotY = model.rotation.y;
+    const fromRotZ = model.rotation.z;
+    const fromScale = model.scale.clone();
+    await new Promise<void>((resolve) => {
+      const settleTick = () => {
+        const p = Math.min(1, (performance.now() - settleStart) / settleDuration);
+        const s = MathUtils.smootherstep(p, 0, 1);
+        model.position.y = MathUtils.lerp(fromY, startY, s);
+        model.rotation.x = MathUtils.lerp(fromRotX, startRotX, s);
+        model.rotation.y = MathUtils.lerp(fromRotY, startRotY, s);
+        model.rotation.z = MathUtils.lerp(fromRotZ, startRotZ, s);
+        model.scale.set(
+          MathUtils.lerp(fromScale.x, startScale.x, s),
+          MathUtils.lerp(fromScale.y, startScale.y, s),
+          MathUtils.lerp(fromScale.z, startScale.z, s)
+        );
+
+        if (p < 1) {
+          requestAnimationFrame(settleTick);
+        } else {
+          resolve();
+        }
+      };
+      settleTick();
     });
 
     actionRunningRef.current = false;
