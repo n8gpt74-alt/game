@@ -26,8 +26,17 @@ def _get_alembic_config() -> Config:
 
 
 def run_migrations() -> None:
-    inspector = inspect(engine)
-    existing_tables = set(inspector.get_table_names())
+    try:
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(
+            "Failed to connect to DATABASE_URL while running migrations. "
+            "On Windows this can surface as a psycopg2 UnicodeDecodeError when the Postgres host is unreachable "
+            "(e.g. using docker-compose hostname 'db' outside docker). "
+            "Set DATABASE_URL to a reachable database (example for local dev: sqlite:///./local_run.db) "
+            "or start the docker-compose stack, then retry."
+        ) from exc
     config = _get_alembic_config()
 
     if "alembic_version" in existing_tables:
