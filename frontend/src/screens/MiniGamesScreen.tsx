@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { игрыПоКатегории, КАТАЛОГ_МИНИ_ИГР, КАТЕГОРИИ_МИНИ_ИГР, найтиИгру, type КатегорияКаталогаМиниИгры } from "../features/minigames/catalog";
+import { игрыПоКатегории, КАТЕГОРИИ_МИНИ_ИГР, найтиИгру, type КатегорияКаталогаМиниИгры } from "../features/minigames/catalog";
 import type { MiniGameQuestion } from "../features/minigames/generators";
 import { остановитьОзвучку, озвучитьТекст } from "../features/minigames/speech";
 import type { ЗапросРезультатаМиниИгры, ТипМиниИгры } from "../types";
@@ -31,14 +31,18 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
       return;
     }
 
-    const result = озвучитьТекст(question.speechText, "ru-RU");
-    if (result.spoken) {
-      setSpeechFallback(null);
-    } else {
-      setSpeechFallback(question.speechFallbackText ?? result.fallbackText ?? null);
-    }
+    let cancelled = false;
+    void озвучитьТекст(question.speechText, "ru-RU").then((result) => {
+      if (cancelled) return;
+      if (result.spoken) {
+        setSpeechFallback(null);
+      } else {
+        setSpeechFallback(question.speechFallbackText ?? result.fallbackText ?? null);
+      }
+    });
 
     return () => {
+      cancelled = true;
       остановитьОзвучку();
     };
   }, [currentGame, question?.speechText, question?.speechFallbackText]);
@@ -88,9 +92,9 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
     }, 220);
   };
 
-  const repeatSpeech = () => {
+  const repeatSpeech = async () => {
     if (!question?.speechText) return;
-    const result = озвучитьТекст(question.speechText, "ru-RU");
+    const result = await озвучитьТекст(question.speechText, "ru-RU");
     if (result.spoken) {
       setSpeechFallback(null);
     } else {

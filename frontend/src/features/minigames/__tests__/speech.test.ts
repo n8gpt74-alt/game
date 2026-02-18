@@ -19,18 +19,20 @@ afterEach(() => {
 });
 
 describe("speech helper", () => {
-  it("returns fallback text when Web Speech API is unavailable", () => {
+  it("returns fallback text when Web Speech API is unavailable", async () => {
     Object.defineProperty(window, "speechSynthesis", { value: undefined, configurable: true });
     (window as Window & { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance = undefined;
 
-    const result = озвучитьТекст("А");
+    const result = await озвучитьТекст("А");
 
     expect(result.spoken).toBe(false);
     expect(result.fallbackText).toBe("Слушай: А");
   });
 
-  it("uses speechSynthesis when API is available", () => {
-    const speak = vi.fn();
+  it("uses speechSynthesis when API is available", async () => {
+    const speak = vi.fn((utterance: MockUtterance) => {
+      utterance.onstart?.(new Event("start"));
+    });
     const cancel = vi.fn();
 
     class MockUtterance {
@@ -39,6 +41,9 @@ describe("speech helper", () => {
       rate = 1;
       pitch = 1;
       voice: unknown = null;
+      onstart?: (event: Event) => void;
+      onerror?: (event: Event) => void;
+      onend?: (event: Event) => void;
 
       constructor(text: string) {
         this.text = text;
@@ -55,7 +60,7 @@ describe("speech helper", () => {
     });
     (window as Window & { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance = MockUtterance;
 
-    const result = озвучитьТекст("Б");
+    const result = await озвучитьТекст("Б");
 
     expect(result.spoken).toBe(true);
     expect(result.fallbackText).toBeNull();

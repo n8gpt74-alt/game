@@ -20,31 +20,46 @@ export function остановитьОзвучку(): void {
   }
 }
 
-export function озвучитьТекст(text: string, lang = "ru-RU"): РезультатОзвучки {
+export function озвучитьТекст(text: string, lang = "ru-RU", timeoutMs = 1200): Promise<РезультатОзвучки> {
   const normalized = text.trim();
-  if (!normalized) return { spoken: false, fallbackText: null };
+  if (!normalized) return Promise.resolve({ spoken: false, fallbackText: null });
 
   const fallbackText = `Слушай: ${normalized}`;
   if (!hasSpeechApi()) {
-    return { spoken: false, fallbackText };
+    return Promise.resolve({ spoken: false, fallbackText });
   }
 
-  try {
-    const utterance = new window.SpeechSynthesisUtterance(normalized);
-    utterance.lang = lang;
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
+  return new Promise((resolve) => {
+    let settled = false;
 
-    const voices = window.speechSynthesis.getVoices();
-    const ruVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith("ru"));
-    if (ruVoice) {
-      utterance.voice = ruVoice;
+    const finish = (spoken: boolean): void => {
+      if (settled) return;
+      settled = true;
+      resolve({ spoken, fallbackText: spoken ? null : fallbackText });
+    };
+
+    try {
+      const utterance = new window.SpeechSynthesisUtterance(normalized);
+      utterance.lang = lang;
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+
+      const voices = window.speechSynthesis.getVoices();
+      const ruVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith("ru"));
+      if (ruVoice) {
+        utterance.voice = ruVoice;
+      }
+
+      utterance.onstart = () => finish(true);
+      utterance.onerror = () => finish(false);
+      utterance.onend = () => finish(true);
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+
+      window.setTimeout(() => finish(false), Math.max(300, timeoutMs));
+    } catch {
+      finish(false);
     }
-
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    return { spoken: true, fallbackText: null };
-  } catch {
-    return { spoken: false, fallbackText };
-  }
+  });
 }
