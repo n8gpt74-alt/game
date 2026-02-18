@@ -72,6 +72,27 @@ EVENT_POINTS_BY_ACTION = {
     "clean": 1,
 }
 
+MINIGAME_CATEGORY_BY_TYPE = {
+    "count_2_4": "math",
+    "sum_4_6": "math",
+    "compare": "math",
+    "fast_count_6_8": "math",
+    "sub_1_5": "math",
+    "sequence_next": "math",
+    "shape_count": "math",
+    "word_problem_lite": "math",
+    "ru_letter_sound_pick": "letters",
+    "ru_first_letter_word": "letters",
+    "ru_vowel_consonant": "letters",
+    "ru_missing_letter": "letters",
+}
+
+
+def _minigame_category(game_type: str, source: str) -> str:
+    if source == "3d":
+        return "3d"
+    return MINIGAME_CATEGORY_BY_TYPE.get(game_type, "math")
+
 
 
 def _action_for_item_category(category: str) -> str:
@@ -402,6 +423,7 @@ def execute_minigame(
     lonely = is_absent_more_than_24h(pet.last_active_at, now)
     apply_time_decay(pet, now=now, cap_seconds=settings.decay_cap_seconds, lonely=lonely)
 
+    category = _minigame_category(game_type, source)
     success = score >= 3
     base_xp = 15 if success else 6
     base_coins = 10 if success else 3
@@ -424,10 +446,21 @@ def execute_minigame(
 
     progress = ensure_today_progress(db, pet.user_id)
     before = read_tasks(progress)
+    before_completed = {
+        str(task.get("task_key")): bool(task.get("completed"))
+        for task in before
+        if task.get("task_key")
+    }
     increment_task(progress, "minigame_count", 1)
+    if category == "math":
+        increment_task(progress, "math_minigame_count", 1)
+    if category == "letters":
+        increment_task(progress, "letters_game_count", 1)
     after = read_tasks(progress)
     completed_notice = any(
-        (not bool(before[i].get("completed")) and bool(after[i].get("completed"))) for i in range(min(len(before), len(after)))
+        (not before_completed.get(str(task.get("task_key")), False)) and bool(task.get("completed"))
+        for task in after
+        if task.get("task_key")
     )
     db.add(progress)
 
@@ -442,6 +475,7 @@ def execute_minigame(
         item_qty=0,
         payload={
             "game_type": game_type,
+            "category": category,
             "score": score,
             "elapsed_ms": elapsed_ms,
             "source": source,
@@ -468,13 +502,17 @@ def execute_minigame(
         notifications.append("Событие завершено! Заберите награду в разделе «События»")
 
     _apply_achievement_delta(db, pet.user_id, "minigame_count_20", 1, notifications)
+    if category == "math":
+        _apply_achievement_delta(db, pet.user_id, "math_minigame_count_20", 1, notifications)
+    if category == "letters":
+        _apply_achievement_delta(db, pet.user_id, "letters_game_count_20", 1, notifications)
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
 
-
     notifications.extend(apply_quest_metric(db, pet.user_id, "minigame", 1))
+    if category in {"math", "letters"}:
+        notifications.extend(apply_quest_metric(db, pet.user_id, f"minigame:{category}", 1))
     if update is not None:
         notifications.extend(apply_quest_metric(db, pet.user_id, "event_points", points))
-
 
     event = _record_event(
         db,
@@ -482,6 +520,7 @@ def execute_minigame(
         "мини_игра",
         {
             "game_type": game_type,
+            "category": category,
             "score": score,
             "elapsed_ms": elapsed_ms,
             "source": source,

@@ -367,6 +367,7 @@ export default function App() {
             state: snapshot.state,
             history: snapshot.history,
             daily: snapshot.daily,
+            daily_date_key: snapshot.daily_date_key,
             inventory: snapshot.inventory,
             streak: snapshot.streak,
             activeEvent: snapshot.activeEvent,
@@ -401,6 +402,7 @@ export default function App() {
       state,
       history: history.slice(0, 30),
       daily,
+      daily_date_key: new Date().toISOString().slice(0, 10),
       catalog,
       inventory,
       streak,
@@ -413,6 +415,7 @@ export default function App() {
       state,
       history: history.slice(0, 30),
       daily,
+      daily_date_key: new Date().toISOString().slice(0, 10),
       inventory,
       streak,
       activeEvent,
@@ -556,17 +559,50 @@ export default function App() {
           получитьДостижения(token)
         ]);
         if (!active) return;
-        
+
+        let nextState = применитьСостояниеСервера(stateData);
+        let nextHistory = historyData.slice(0, 20);
+        let nextDaily = dailyData;
+        let nextStreak = streakData;
+        let nextAchievements = achievementsData;
+
+        if (!nextDaily.login_bonus_claimed) {
+          try {
+            nextDaily = await получитьЗаданияДня(token);
+          } catch {
+            // Игнорируем дополнительную проверку daily.
+          }
+
+          if (!nextDaily.login_bonus_claimed) {
+            try {
+              const loginBonusResult = await получитьБонусЗаВход(token);
+              nextState = применитьСостояниеСервера(loginBonusResult.state);
+              nextHistory = [loginBonusResult.event, ...nextHistory].slice(0, 20);
+              nextDaily = loginBonusResult.daily;
+
+              const [streakAfterBonus, achievementsAfterBonus] = await Promise.all([
+                получитьСерию(token),
+                получитьДостижения(token)
+              ]);
+              nextStreak = streakAfterBonus;
+              nextAchievements = achievementsAfterBonus;
+            } catch {
+              // Если бонус уже выдан на backend, продолжаем с текущими данными.
+            }
+          }
+        }
+
+        if (!active) return;
+
         // Применяем серверные данные
-        const serverState = применитьСостояниеСервера(stateData);
-        setState(serverState);
-        setHistory(historyData.slice(0, 20));
-        setDaily(dailyData);
+        setState(nextState);
+        setHistory(nextHistory);
+        setDaily(nextDaily);
         setCatalog(catalogData);
         setInventory(inventoryData);
-        setStreak(streakData);
+        setStreak(nextStreak);
         setActiveEvent(activeEventData);
-        setAchievements(achievementsData);
+        setAchievements(nextAchievements);
 
         setIsOffline(false);
         setIsSyncing(false);
@@ -1557,7 +1593,7 @@ export default function App() {
                   setShowMathMiniGames(true);
                 }}
               >
-                Открыть математические игры
+                Открыть каталог мини-игр
               </button>
             </div>
           </div>

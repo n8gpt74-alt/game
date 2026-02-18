@@ -119,7 +119,20 @@ class InventoryOut(BaseModel):
 
 
 class MinigameResultRequest(BaseModel):
-    game_type: Literal["count_2_4", "sum_4_6", "compare", "fast_count_6_8"]
+    game_type: Literal[
+        "count_2_4",
+        "sum_4_6",
+        "compare",
+        "fast_count_6_8",
+        "sub_1_5",
+        "sequence_next",
+        "shape_count",
+        "word_problem_lite",
+        "ru_letter_sound_pick",
+        "ru_first_letter_word",
+        "ru_vowel_consonant",
+        "ru_missing_letter",
+    ]
     score: int = Field(ge=0, le=5)
     elapsed_ms: int = Field(ge=500, le=120000)
     source: Literal["math", "3d"] = "math"

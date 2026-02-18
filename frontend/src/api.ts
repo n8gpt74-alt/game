@@ -1,5 +1,6 @@
 import type {
   КаталогМагазина,
+  КатегорияМиниИгры,
   ОтветДействия,
   ОтветМиниИгры,
   ОтветПокупки,
@@ -13,6 +14,7 @@ import type {
   СостояниеСерии,
   СостояниеСобытия,
   ТипДействия,
+  ТипМиниИгры,
   ТоварМагазина
 } from "./types";
 
@@ -113,19 +115,99 @@ const SHOP_BASE: Array<Omit<ТоварМагазина, "price" | "owned">> = [
 const DEFAULT_DAILY_TASKS = [
   { task_key: "feed_count", title: "Покормить 2 раза", target: 2, progress: 0, completed: false },
   { task_key: "minigame_count", title: "Пройти 1 мини-игру", target: 1, progress: 0, completed: false },
+  { task_key: "math_minigame_count", title: "Математика: 1 мини-игра", target: 1, progress: 0, completed: false },
+  { task_key: "letters_game_count", title: "Буквы: 1 игра", target: 1, progress: 0, completed: false },
   { task_key: "play_count", title: "Поиграть 1 раз", target: 1, progress: 0, completed: false }
-];
+] as const;
+
+const MINI_GAME_CATEGORY_BY_TYPE: Record<ТипМиниИгры, Exclude<КатегорияМиниИгры, "3d">> = {
+  count_2_4: "math",
+  sum_4_6: "math",
+  compare: "math",
+  fast_count_6_8: "math",
+  sub_1_5: "math",
+  sequence_next: "math",
+  shape_count: "math",
+  word_problem_lite: "math",
+  ru_letter_sound_pick: "letters",
+  ru_first_letter_word: "letters",
+  ru_vowel_consonant: "letters",
+  ru_missing_letter: "letters"
+};
 
 type ЛокальноеХранилище = {
   state: СостояниеПитомца;
   history: ЗаписьСобытия[];
   daily: СостояниеЗаданий;
+  dailyDateKey: string;
   inventory: ПредметИнвентаря[];
   streak: СостояниеСерии;
   activeEvent: СостояниеСобытия;
   achievementProgress: Record<string, { progress: number; claimed: boolean }>;
   nextEventId: number;
 };
+
+function cloneDefaultDailyTasks(): СостояниеЗаданий["tasks"] {
+  return DEFAULT_DAILY_TASKS.map((task) => ({ ...task }));
+}
+
+function normalizeDailyTasks(tasks: СостояниеЗаданий["tasks"]): СостояниеЗаданий["tasks"] {
+  const byKey = new Map<string, СостояниеЗаданий["tasks"][number]>();
+  for (const task of tasks) {
+    byKey.set(task.task_key, { ...task });
+  }
+
+  const normalized = cloneDefaultDailyTasks().map((task) => {
+    const existing = byKey.get(task.task_key);
+    if (!existing) return task;
+    const progress = Math.max(0, Number(existing.progress) || 0);
+    const target = Math.max(1, Number(existing.target) || task.target);
+    return {
+      ...task,
+      title: existing.title || task.title,
+      target,
+      progress,
+      completed: progress >= target || Boolean(existing.completed)
+    };
+  });
+
+  for (const task of tasks) {
+    if (normalized.some((row) => row.task_key === task.task_key)) continue;
+    normalized.push({ ...task, completed: Number(task.progress) >= Number(task.target) || Boolean(task.completed) });
+  }
+
+  return normalized;
+}
+
+function категорияМиниИгры(
+  gameType: ТипМиниИгры,
+  source: ЗапросРезультатаМиниИгры["source"] | undefined
+): КатегорияМиниИгры {
+  if (source === "3d") return "3d";
+  return MINI_GAME_CATEGORY_BY_TYPE[gameType] ?? "math";
+}
+
+function ensureDailyTask(taskKey: string): СостояниеЗаданий["tasks"][number] | null {
+  const existing = localStore.daily.tasks.find((task) => task.task_key === taskKey);
+  if (existing) return existing;
+
+  const template = DEFAULT_DAILY_TASKS.find((task) => task.task_key === taskKey);
+  if (!template) return null;
+
+  const created = { ...template };
+  localStore.daily.tasks.push(created);
+  return created;
+}
+
+function incrementDailyTask(taskKey: string, amount = 1): void {
+  if (amount <= 0) return;
+  const task = ensureDailyTask(taskKey);
+  if (!task) return;
+  task.progress += amount;
+  task.completed = task.progress >= task.target;
+  localStore.daily.all_completed = localStore.daily.tasks.every((row) => row.completed);
+}
+
 
 function создатьЛокальныйState(): СостояниеПитомца {
   return {
@@ -154,11 +236,12 @@ const localStore: ЛокальноеХранилище = {
   state: создатьЛокальныйState(),
   history: [],
   daily: {
-    tasks: DEFAULT_DAILY_TASKS.map((task) => ({ ...task })),
+    tasks: cloneDefaultDailyTasks(),
     login_bonus_claimed: false,
     chest_claimed: false,
     all_completed: false
   },
+  dailyDateKey: dateKeyNow(),
   inventory: [
     { item_key: "food_apple", quantity: 8 },
     { item_key: "food_carrot", quantity: 5 },
@@ -188,11 +271,12 @@ function resetLocalFallbackStore(): void {
   localStore.state = создатьЛокальныйState();
   localStore.history = [];
   localStore.daily = {
-    tasks: DEFAULT_DAILY_TASKS.map((task) => ({ ...task })),
+    tasks: cloneDefaultDailyTasks(),
     login_bonus_claimed: false,
     chest_claimed: false,
     all_completed: false
   };
+  localStore.dailyDateKey = dateKeyNow();
   localStore.inventory = [
     { item_key: "food_apple", quantity: 8 },
     { item_key: "food_carrot", quantity: 5 },
@@ -223,6 +307,7 @@ export function гидратироватьЛокальныйFallback(
     state: СостояниеПитомца | null;
     history: ЗаписьСобытия[];
     daily: СостояниеЗаданий | null;
+    daily_date_key?: string | null;
     inventory: ПредметИнвентаря[];
     streak: СостояниеСерии | null;
     activeEvent: СостояниеСобытия | null;
@@ -236,11 +321,17 @@ export function гидратироватьЛокальныйFallback(
   localStore.state = { ...snapshot.state };
   localStore.history = Array.isArray(snapshot.history) ? snapshot.history.map((row) => ({ ...row })) : [];
   if (snapshot.daily) {
-    localStore.daily = { ...snapshot.daily, tasks: snapshot.daily.tasks.map((task) => ({ ...task })) };
+    const tasks = normalizeDailyTasks(snapshot.daily.tasks.map((task) => ({ ...task })));
+    localStore.daily = {
+      ...snapshot.daily,
+      tasks,
+      all_completed: tasks.every((task) => task.completed)
+    };
   }
   localStore.inventory = Array.isArray(snapshot.inventory)
     ? snapshot.inventory.map((row) => ({ ...row }))
     : [];
+  localStore.dailyDateKey = (snapshot.daily_date_key ?? "").trim() || dateKeyNow();
 
   if (snapshot.streak) {
     localStore.streak = { ...snapshot.streak };
@@ -265,11 +356,25 @@ export function гидратироватьЛокальныйFallback(
     return Math.max(max, row.id);
   }, 0);
   localStore.nextEventId = maxId + 1;
+  ensureLocalDailyStateFresh();
 }
 
 
 function dateKeyNow(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function ensureLocalDailyStateFresh(): void {
+  const today = dateKeyNow();
+  if (localStore.dailyDateKey === today) return;
+
+  localStore.dailyDateKey = today;
+  localStore.daily = {
+    tasks: cloneDefaultDailyTasks(),
+    login_bonus_claimed: false,
+    chest_claimed: false,
+    all_completed: false
+  };
 }
 
 function streakBonusFor(streak: number): { coins: number; xp: number; milestone: number | null } {
@@ -302,6 +407,8 @@ const ACHIEVEMENT_DEFS: Record<string, AchievementDef> = {
   feed_count_25: { title: "Заботливый кормилец", description: "Покормить питомца 25 раз", target: 25, reward_coins: 120, reward_xp: 50 },
   play_count_25: { title: "Друг по играм", description: "Поиграть с питомцем 25 раз", target: 25, reward_coins: 140, reward_xp: 60 },
   minigame_count_20: { title: "Мини-игроман", description: "Пройти 20 мини-игр", target: 20, reward_coins: 180, reward_xp: 80 },
+  math_minigame_count_20: { title: "Математический ум", description: "Пройти 20 математических мини-игр", target: 20, reward_coins: 220, reward_xp: 95 },
+  letters_game_count_20: { title: "Азбука в деле", description: "Пройти 20 буквенных игр", target: 20, reward_coins: 220, reward_xp: 95 },
   coins_earned_1000: { title: "Копилка", description: "Заработать 1000 монет", target: 1000, reward_coins: 250, reward_xp: 90 },
   streak_best_7: { title: "Неделя вместе", description: "Поддерживать серию входов 7 дней", target: 7, reward_coins: 220, reward_xp: 100 },
   streak_best_30: { title: "Легенда заботы", description: "Поддерживать серию входов 30 дней", target: 30, reward_coins: 700, reward_xp: 250 }
@@ -399,22 +506,17 @@ function updateDailyFromAction(action: ТипДействия): void {
   };
   const taskKey = taskKeyByAction[action];
   if (!taskKey) return;
-
-  localStore.daily.tasks = localStore.daily.tasks.map((task) => {
-    if (task.task_key !== taskKey) return task;
-    const progress = task.progress + 1;
-    return { ...task, progress, completed: progress >= task.target };
-  });
-  localStore.daily.all_completed = localStore.daily.tasks.every((task) => task.completed);
+  incrementDailyTask(taskKey, 1);
 }
 
-function updateDailyFromMiniGame(): void {
-  localStore.daily.tasks = localStore.daily.tasks.map((task) => {
-    if (task.task_key !== "minigame_count") return task;
-    const progress = task.progress + 1;
-    return { ...task, progress, completed: progress >= task.target };
-  });
-  localStore.daily.all_completed = localStore.daily.tasks.every((task) => task.completed);
+function updateDailyFromMiniGame(category: КатегорияМиниИгры): void {
+  incrementDailyTask("minigame_count", 1);
+  if (category === "math") {
+    incrementDailyTask("math_minigame_count", 1);
+  }
+  if (category === "letters") {
+    incrementDailyTask("letters_game_count", 1);
+  }
 }
 
 function gainProgress(baseXp: number, baseCoins: number, baseIntelligence = 0): Награда {
@@ -528,6 +630,7 @@ function localAction(action: ТипДействия): ОтветДействия
 function localMiniGame(payload: ЗапросРезультатаМиниИгры): ОтветМиниИгры {
   const success = payload.score >= 3;
   const source = payload.source ?? "math";
+  const category = категорияМиниИгры(payload.game_type, source);
   const isMathMiniGame = source === "math";
   const energyRecovered = isMathMiniGame ? (success ? 12 : 6) : 0;
   const reward = success ? gainProgress(15, 10, 2) : gainProgress(6, 3, 0);
@@ -536,20 +639,30 @@ function localMiniGame(payload: ЗапросРезультатаМиниИгры
     localStore.state.happiness = clamp(localStore.state.happiness + (success ? 4 : 2));
     localStore.state.behavior_state = определитьСостояниеПитомца(localStore.state);
   }
-  updateDailyFromMiniGame();
+
+  const beforeCompleted = new Map(localStore.daily.tasks.map((task) => [task.task_key, task.completed]));
+  updateDailyFromMiniGame(category);
+
   const notifications: string[] = [];
   addEventPointsLocal(success ? 2 : 1, notifications);
   addAchievementProgressLocal("minigame_count_20", 1, notifications);
+  if (category === "math") addAchievementProgressLocal("math_minigame_count_20", 1, notifications);
+  if (category === "letters") addAchievementProgressLocal("letters_game_count_20", 1, notifications);
   addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
 
   if (energyRecovered > 0) notifications.push(`Энергия восстановлена: +${energyRecovered}`);
   if (reward.level_up) notifications.push("Новый уровень!");
-  if (localStore.daily.tasks.find((task) => task.task_key === "minigame_count")?.completed) {
+
+  const completedNow = localStore.daily.tasks.some(
+    (task) => task.completed && !beforeCompleted.get(task.task_key)
+  );
+  if (completedNow) {
     notifications.push("Задание выполнено");
   }
 
   const event = addHistory("мини_игра", {
     game_type: payload.game_type,
+    category,
     score: payload.score,
     elapsed_ms: payload.elapsed_ms,
     source,
@@ -710,8 +823,64 @@ function parseLimit(path: string): number {
   return Math.max(1, Math.min(200, raw));
 }
 
+function localClaimLoginBonus(): ОтветДействия {
+  if (localStore.daily.login_bonus_claimed) {
+    throw new Error(JSON.stringify({ detail: "Бонус уже получен" }));
+  }
+
+  localStore.daily.login_bonus_claimed = true;
+  localStore.dailyDateKey = dateKeyNow();
+
+  const today = dateKeyNow();
+  const previous = localStore.streak.last_claim_date;
+
+  if (!previous) {
+    localStore.streak.current = 1;
+  } else {
+    const prevDate = new Date(`${previous}T00:00:00.000Z`);
+    const curDate = new Date(`${today}T00:00:00.000Z`);
+    const diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / 86400000);
+    localStore.streak.current = diffDays === 1 ? localStore.streak.current + 1 : 1;
+  }
+
+  localStore.streak.best = Math.max(localStore.streak.best, localStore.streak.current);
+  localStore.streak.last_claim_date = today;
+
+  const bonus = streakBonusFor(localStore.streak.current);
+  const reward = gainProgress(12 + bonus.xp, 100 + bonus.coins, 0);
+
+  const notifications = ["Бонус за вход получен", `Серия входов: ${localStore.streak.current} дней`];
+  if (bonus.coins || bonus.xp) {
+    const parts: string[] = [];
+    if (bonus.coins) parts.push(`+${bonus.coins} монет`);
+    if (bonus.xp) parts.push(`+${bonus.xp} XP`);
+    notifications.push("Бонус серии: " + parts.join(", "));
+  }
+  if (bonus.milestone) {
+    notifications.push(`Рубеж серии: ${bonus.milestone} дней`);
+  }
+
+  setAchievementProgressMaxLocal("streak_best_7", localStore.streak.best, notifications);
+  setAchievementProgressMaxLocal("streak_best_30", localStore.streak.best, notifications);
+  addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
+
+  const event = addHistory("бонус_входа", { reward, daily: localStore.daily, notifications, streak: localStore.streak });
+  return {
+    state: { ...localStore.state },
+    event,
+    reward,
+    daily: { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) },
+    notifications
+  };
+}
+
 function localFallbackRequest<T>(path: string, method: string, body: unknown): T {
+  ensureLocalDailyStateFresh();
+
   if (path.startsWith("/state") && method === "GET") {
+    if (!localStore.daily.login_bonus_claimed) {
+      localClaimLoginBonus();
+    }
     return { ...localStore.state } as T;
   }
   if (path.startsWith("/history") && method === "GET") {
@@ -722,51 +891,7 @@ function localFallbackRequest<T>(path: string, method: string, body: unknown): T
     return { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) } as T;
   }
   if (path === "/daily/claim-login" && method === "POST") {
-    if (localStore.daily.login_bonus_claimed) {
-      throw new Error(JSON.stringify({ detail: "Бонус уже получен" }));
-    }
-    localStore.daily.login_bonus_claimed = true;
-    const today = dateKeyNow();
-    const previous = localStore.streak.last_claim_date;
-
-    if (!previous) {
-      localStore.streak.current = 1;
-    } else {
-      const prevDate = new Date(`${previous}T00:00:00.000Z`);
-      const curDate = new Date(`${today}T00:00:00.000Z`);
-      const diffDays = Math.round((curDate.getTime() - prevDate.getTime()) / 86400000);
-      localStore.streak.current = diffDays === 1 ? localStore.streak.current + 1 : 1;
-    }
-
-    localStore.streak.best = Math.max(localStore.streak.best, localStore.streak.current);
-    localStore.streak.last_claim_date = today;
-
-    const bonus = streakBonusFor(localStore.streak.current);
-    const reward = gainProgress(12 + bonus.xp, 20 + bonus.coins, 0);
-
-    const notifications = ["Бонус за вход получен", `Серия входов: ${localStore.streak.current} дней`];
-    if (bonus.coins || bonus.xp) {
-      const parts: string[] = [];
-      if (bonus.coins) parts.push(`+${bonus.coins} монет`);
-      if (bonus.xp) parts.push(`+${bonus.xp} XP`);
-      notifications.push("Бонус серии: " + parts.join(", "));
-    }
-    if (bonus.milestone) {
-      notifications.push(`Рубеж серии: ${bonus.milestone} дней`);
-    }
-
-    setAchievementProgressMaxLocal("streak_best_7", localStore.streak.best, notifications);
-    setAchievementProgressMaxLocal("streak_best_30", localStore.streak.best, notifications);
-    addAchievementProgressLocal("coins_earned_1000", reward.coins, notifications);
-
-    const event = addHistory("бонус_входа", { reward, daily: localStore.daily, notifications, streak: localStore.streak });
-    return {
-      state: { ...localStore.state },
-      event,
-      reward,
-      daily: { ...localStore.daily, tasks: localStore.daily.tasks.map((task) => ({ ...task })) },
-      notifications
-    } as T;
+    return localClaimLoginBonus() as T;
   }
   if (path === "/daily/claim-chest" && method === "POST") {
     if (!localStore.daily.all_completed || localStore.daily.chest_claimed) {

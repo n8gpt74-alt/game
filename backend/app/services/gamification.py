@@ -72,6 +72,20 @@ ACHIEVEMENT_DEFINITIONS: dict[str, dict[str, int | str]] = {
         "reward_coins": 180,
         "reward_xp": 80,
     },
+    "math_minigame_count_20": {
+        "title": "Математический ум",
+        "description": "Пройти 20 математических мини-игр",
+        "target": 20,
+        "reward_coins": 220,
+        "reward_xp": 95,
+    },
+    "letters_game_count_20": {
+        "title": "Азбука в деле",
+        "description": "Пройти 20 буквенных игр",
+        "target": 20,
+        "reward_coins": 220,
+        "reward_xp": 95,
+    },
     "coins_earned_1000": {
         "title": "Копилка",
         "description": "Заработать 1000 монет",

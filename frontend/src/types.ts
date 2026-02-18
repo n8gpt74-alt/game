@@ -77,8 +77,24 @@ export interface ОтветДействия {
   notifications: string[];
 }
 
+export type ТипМиниИгры =
+  | "count_2_4"
+  | "sum_4_6"
+  | "compare"
+  | "fast_count_6_8"
+  | "sub_1_5"
+  | "sequence_next"
+  | "shape_count"
+  | "word_problem_lite"
+  | "ru_letter_sound_pick"
+  | "ru_first_letter_word"
+  | "ru_vowel_consonant"
+  | "ru_missing_letter";
+
+export type КатегорияМиниИгры = "math" | "letters" | "3d";
+
 export interface ЗапросРезультатаМиниИгры {
-  game_type: "count_2_4" | "sum_4_6" | "compare" | "fast_count_6_8";
+  game_type: ТипМиниИгры;
   score: number;
   elapsed_ms: number;
   source?: "math" | "3d";

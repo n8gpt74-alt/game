@@ -13,6 +13,7 @@ export type ЛокальныйСнимок = {
   state: СостояниеПитомца | null;
   history: ЗаписьСобытия[];
   daily: СостояниеЗаданий | null;
+  daily_date_key?: string | null;
   catalog: КаталогМагазина;
   inventory: ПредметИнвентаря[];
   streak: СостояниеСерии | null;
@@ -45,6 +46,7 @@ export function загрузитьЛокальныйСнимок(storageUserId: 
       state: (parsed.state as СостояниеПитомца | null) ?? null,
       history: Array.isArray(parsed.history) ? (parsed.history as ЗаписьСобытия[]) : [],
       daily: (parsed.daily as СостояниеЗаданий | null) ?? null,
+      daily_date_key: typeof parsed.daily_date_key === "string" ? parsed.daily_date_key : null,
       catalog: (parsed.catalog as КаталогМагазина) ?? { items: [] },
       inventory: Array.isArray(parsed.inventory) ? (parsed.inventory as ПредметИнвентаря[]) : [],
       streak: (parsed.streak as СостояниеСерии | null) ?? null,

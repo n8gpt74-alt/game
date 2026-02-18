@@ -96,6 +96,8 @@ def state(db: DbDep, user_id: UserDep) -> PetStateOut:
     pet = ensure_pet_state(db, user_id)
     run_decay(db, pet)
     db.refresh(pet)
+    claim_login_bonus_for_pet(db, pet)
+    db.refresh(pet)
     return PetStateOut(**serialize_pet_state(pet))
 
 

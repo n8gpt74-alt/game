@@ -21,12 +21,17 @@ def today_key(now: datetime | None = None) -> str:
     return utc.strftime("%Y-%m-%d")
 
 
+DEFAULT_TASKS_TEMPLATE = [
+    {"task_key": "feed_count", "title": "Покормить 2 раза", "target": 2, "progress": 0, "completed": False},
+    {"task_key": "minigame_count", "title": "Пройти 1 мини-игру", "target": 1, "progress": 0, "completed": False},
+    {"task_key": "math_minigame_count", "title": "Математика: 1 мини-игра", "target": 1, "progress": 0, "completed": False},
+    {"task_key": "letters_game_count", "title": "Буквы: 1 игра", "target": 1, "progress": 0, "completed": False},
+    {"task_key": "play_count", "title": "Поиграть 1 раз", "target": 1, "progress": 0, "completed": False},
+]
+
+
 def default_tasks() -> list[dict]:
-    return [
-        {"task_key": "feed_count", "title": "Покормить 2 раза", "target": 2, "progress": 0, "completed": False},
-        {"task_key": "minigame_count", "title": "Пройти 1 мини-игру", "target": 1, "progress": 0, "completed": False},
-        {"task_key": "play_count", "title": "Поиграть 1 раз", "target": 1, "progress": 0, "completed": False},
-    ]
+    return [dict(task) for task in DEFAULT_TASKS_TEMPLATE]
 
 
 def _parse_tasks(raw: str) -> list[dict]:
@@ -79,12 +84,23 @@ def all_tasks_completed(tasks: list[dict]) -> bool:
 def increment_task(progress: DailyProgress, task_key: str, amount: int = 1) -> bool:
     tasks = read_tasks(progress)
     changed = False
+    found = False
     for task in tasks:
         if task.get("task_key") != task_key:
             continue
         task["progress"] = int(task.get("progress", 0)) + amount
         task["completed"] = task["progress"] >= int(task.get("target", 1))
         changed = True
+        found = True
+
+    if not found:
+        template = next((task for task in default_tasks() if task.get("task_key") == task_key), None)
+        if template is not None:
+            template["progress"] = max(0, amount)
+            template["completed"] = template["progress"] >= int(template.get("target", 1))
+            tasks.append(template)
+            changed = True
+
     if changed:
         save_tasks(progress, tasks)
     return changed
@@ -94,7 +110,7 @@ def claim_login_bonus(progress: DailyProgress) -> DailyReward | None:
     if progress.login_bonus_claimed:
         return None
     progress.login_bonus_claimed = True
-    return DailyReward(coins=20, xp=12, message="Бонус за вход получен")
+    return DailyReward(coins=100, xp=12, message="Бонус за вход получен")
 
 
 def claim_daily_chest(progress: DailyProgress) -> DailyReward | None:
