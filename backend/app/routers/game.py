@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user_id
-from app.models import EventLog
+from app.models import EventLog, PetState
 from app.schemas import (
     AchievementClaimRequest,
     AchievementStateOut,
@@ -27,6 +27,7 @@ from app.schemas import (
     StreakStateOut,
     QuestClaimRequest,
     QuestOut,
+    LeaderboardEntryOut,
 )
 from app.services.game import (
     buy_shop_item,
@@ -383,3 +384,22 @@ def quests_claim(payload: QuestClaimRequest, db: DbDep, user_id: UserDep) -> Act
         daily=_to_daily_out(get_daily_state(db, user_id)),
         notifications=result.notifications,
     )
+
+@router.get("/leaderboard", response_model=list[LeaderboardEntryOut])
+def leaderboard(db: DbDep, type: Literal["wealth", "level"] = "wealth", limit: int = Query(default=100, ge=1, le=100)) -> list[LeaderboardEntryOut]:
+    if type == "wealth":
+        rows = db.execute(select(PetState).order_by(desc(PetState.coins)).limit(limit)).scalars()
+    else:
+        rows = db.execute(select(PetState).order_by(desc(PetState.level), desc(PetState.xp)).limit(limit)).scalars()
+        
+    return [
+        LeaderboardEntryOut(
+            user_id=row.user_id,
+            name=row.name,
+            level=row.level,
+            coins=row.coins,
+            rank=idx + 1
+        )
+        for idx, row in enumerate(rows)
+    ]
+

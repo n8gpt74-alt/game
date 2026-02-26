@@ -13,6 +13,16 @@ ACTION_EFFECTS = {
     "clean": {"hygiene": 15, "happiness": 5},  # Убрать какашки
 }
 
+CHARACTER_EFFECTS = {
+    "feed": {"character_friendliness": 1, "character_energy": 1},
+    "wash": {"character_tidiness": 2},
+    "play": {"character_energy": 2, "character_friendliness": 1},
+    "heal": {"character_friendliness": 2},
+    "chat": {"character_curiosity": 2, "character_friendliness": 1},
+    "sleep": {"character_energy": 1},
+    "clean": {"character_tidiness": 2},
+}
+
 
 class PetLike(Protocol):
     hunger: int
@@ -21,12 +31,18 @@ class PetLike(Protocol):
     health: int
     energy: int
     last_tick_at: datetime
+    character_courage: int
+    character_friendliness: int
+    character_energy: int
+    character_curiosity: int
+    character_tidiness: int
 
 
 @dataclass
 class ActionResult:
     action: str
     deltas: dict[str, int]
+    character_deltas: dict[str, int]
 
 
 def clamp(value: int | float, min_value: int = 0, max_value: int = 100) -> int:
@@ -96,4 +112,12 @@ def apply_action(state: PetLike, action: str) -> ActionResult:
         setattr(state, stat, after)
         deltas[stat] = after - before
 
-    return ActionResult(action=action, deltas=deltas)
+    character_deltas: dict[str, int] = {}
+    if action in CHARACTER_EFFECTS:
+        for stat, delta in CHARACTER_EFFECTS[action].items():
+            before = getattr(state, stat)
+            after = clamp(before + delta)
+            setattr(state, stat, after)
+            character_deltas[stat] = after - before
+
+    return ActionResult(action=action, deltas=deltas, character_deltas=character_deltas)

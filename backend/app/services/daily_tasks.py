@@ -21,17 +21,46 @@ def today_key(now: datetime | None = None) -> str:
     return utc.strftime("%Y-%m-%d")
 
 
-DEFAULT_TASKS_TEMPLATE = [
-    {"task_key": "feed_count", "title": "Покормить 2 раза", "target": 2, "progress": 0, "completed": False},
-    {"task_key": "minigame_count", "title": "Пройти 1 мини-игру", "target": 1, "progress": 0, "completed": False},
-    {"task_key": "math_minigame_count", "title": "Математика: 1 мини-игра", "target": 1, "progress": 0, "completed": False},
-    {"task_key": "letters_game_count", "title": "Буквы: 1 игра", "target": 1, "progress": 0, "completed": False},
-    {"task_key": "play_count", "title": "Поиграть 1 раз", "target": 1, "progress": 0, "completed": False},
+import random
+
+# Расширенный пул возможных ежедневных заданий
+TASK_POOL = [
+    # Еда
+    {"task_key": "feed_count", "title": "Покормить питомца 3 раза", "target": 3, "progress": 0, "completed": False},
+    {"task_key": "feed_candy", "title": "Дать конфету или мороженое", "target": 1, "progress": 0, "completed": False},
+    
+    # Гигиена
+    {"task_key": "wash_count", "title": "Помыть 2 раза", "target": 2, "progress": 0, "completed": False},
+    {"task_key": "clean_poop", "title": "Убрать за питомцем", "target": 1, "progress": 0, "completed": False},
+    
+    # Игры
+    {"task_key": "play_count", "title": "Поиграть 2 раза", "target": 2, "progress": 0, "completed": False},
+    {"task_key": "use_toy", "title": "Использовать игрушку", "target": 1, "progress": 0, "completed": False},
+    
+    # Мини-игры
+    {"task_key": "minigame_count", "title": "Сыграть 3 мини-игры", "target": 3, "progress": 0, "completed": False},
+    {"task_key": "math_minigame_count", "title": "Решить 2 математические задачи", "target": 2, "progress": 0, "completed": False},
+    {"task_key": "letters_game_count", "title": "Сыграть 2 игры с буквами", "target": 2, "progress": 0, "completed": False},
+    
+    # Магазин и монеты
+    {"task_key": "shop_buy", "title": "Купить 2 предмета в магазине", "target": 2, "progress": 0, "completed": False},
+    {"task_key": "earn_coins", "title": "Заработать 50 монет", "target": 50, "progress": 0, "completed": False},
+    
+    # Здоровье / Сон
+    {"task_key": "heal_count", "title": "Дать лекарство", "target": 1, "progress": 0, "completed": False},
+    {"task_key": "sleep_count", "title": "Уложить спать 1 раз", "target": 1, "progress": 0, "completed": False},
 ]
 
-
 def default_tasks() -> list[dict]:
-    return [dict(task) for task in DEFAULT_TASKS_TEMPLATE]
+    # Выбираем 3 случайных задания из пула на сегодняшний день
+    # Используем текущую дату в качестве seed для предсказуемости
+    date_seed = int(today_key().replace("-", ""))
+    random.seed(date_seed)
+    selected = random.sample(TASK_POOL, 3)
+    # Сбрасываем seed, чтобы не влиял на другие части программы
+    random.seed()
+    
+    return [dict(task) for task in selected]
 
 
 def _parse_tasks(raw: str) -> list[dict]:
@@ -94,11 +123,15 @@ def increment_task(progress: DailyProgress, task_key: str, amount: int = 1) -> b
         found = True
 
     if not found:
-        template = next((task for task in default_tasks() if task.get("task_key") == task_key), None)
+        # Если задача не найдена в текущем списке, ищем ее в общем пуле,
+        # так как пул динамический
+        template = next((task for task in TASK_POOL if task.get("task_key") == task_key), None)
         if template is not None:
-            template["progress"] = max(0, amount)
-            template["completed"] = template["progress"] >= int(template.get("target", 1))
-            tasks.append(template)
+            # Создаем копию
+            new_task = dict(template)
+            new_task["progress"] = max(0, amount)
+            new_task["completed"] = new_task["progress"] >= int(new_task.get("target", 1))
+            tasks.append(new_task)
             changed = True
 
     if changed:
@@ -110,7 +143,7 @@ def claim_login_bonus(progress: DailyProgress) -> DailyReward | None:
     if progress.login_bonus_claimed:
         return None
     progress.login_bonus_claimed = True
-    return DailyReward(coins=100, xp=12, message="Бонус за вход получен")
+    return DailyReward(coins=500, xp=12, message="Бонус за вход получен")
 
 
 def claim_daily_chest(progress: DailyProgress) -> DailyReward | None:

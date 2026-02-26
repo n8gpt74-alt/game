@@ -4,6 +4,11 @@ import { игрыПоКатегории, КАТЕГОРИИ_МИНИ_ИГР, н�
 import type { MiniGameQuestion } from "../features/minigames/generators";
 import { остановитьОзвучку, озвучитьТекст } from "../features/minigames/speech";
 import type { ЗапросРезультатаМиниИгры, ТипМиниИгры } from "../types";
+import FoodCatcher from "../features/minigames/components/FoodCatcher";
+import MemoryPairs from "../features/minigames/components/MemoryPairs";
+import PixelPattern from "../features/minigames/components/PixelPattern";
+import HangmanGame from "../features/minigames/components/HangmanGame";
+import TicTacToe from "../features/minigames/components/TicTacToe";
 
 type Props = {
   onClose: () => void;
@@ -63,8 +68,13 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
     if (!game) return;
 
     setSelectedType(type);
-    setQuestion(game.generateQuestion());
-    setRound(1);
+    if (game.generateQuestion) {
+      setQuestion(game.generateQuestion());
+      setRound(1);
+    } else {
+      setQuestion(null);
+      setRound(0); // indicates it's a custom component
+    }
     setScore(0);
     setDone(false);
     setStartedAt(Date.now());
@@ -86,7 +96,9 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
         setLocked(false);
       } else {
         setRound((prev) => prev + 1);
-        setQuestion(currentGame.generateQuestion());
+        if (currentGame.generateQuestion) {
+          setQuestion(currentGame.generateQuestion());
+        }
         setLocked(false);
       }
     }, 220);
@@ -111,7 +123,7 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
         game_type: selectedType,
         score,
         elapsed_ms: Math.max(1000, Date.now() - startedAt),
-        source: "math"
+        ...(currentGame?.category === "math" ? { source: "math" as const } : {}),
       };
       await onSubmitResult(payload);
       onClose();
@@ -205,10 +217,51 @@ export default function MiniGamesScreen({ onClose, onSubmitResult }: Props) {
           </div>
         )}
 
+        {selectedType && !question && !done && (
+          <div className="mini-round" style={{ padding: 0 }}>
+             {selectedType === "food_catcher" && (
+                <FoodCatcher onFinish={(finalScore) => {
+                  setScore(finalScore);
+                  setDone(true);
+                }} />
+             )}
+             {selectedType === "memory_pairs" && (
+                <MemoryPairs onFinish={(finalScore) => {
+                  setScore(finalScore);
+                  setDone(true);
+                }} />
+             )}
+             {selectedType === "pixel_pattern" && (
+                <PixelPattern onFinish={(finalScore) => {
+                  setScore(finalScore);
+                  setDone(true);
+                }} />
+             )}
+             {selectedType === "hangman" && (
+                <HangmanGame onFinish={(finalScore) => {
+                  setScore(finalScore);
+                  setDone(true);
+                }} />
+             )}
+             {selectedType === "tic_tac_toe" && (
+                <TicTacToe onFinish={(finalScore) => {
+                  setScore(finalScore);
+                  setDone(true);
+                }} />
+             )}
+          </div>
+        )}
+
         {done && (
           <div className="mini-result">
             <h3>Готово!</h3>
-            <p>Правильных ответов: {score} из 5</p>
+            <p>
+              {currentGame && ["memory_pairs", "pixel_pattern", "hangman", "tic_tac_toe"].includes(currentGame.type)
+                ? `Ваши очки: ${score} из 5`
+                : currentGame?.type === "food_catcher"
+                  ? `Результат: ${score} из 5 ⭐`
+                  : `Ваши очки: ${score} / 5`}
+            </p>
             <button type="button" disabled={submitting} onClick={finish}>
               {submitting ? "Отправка..." : "Забрать награду"}
             </button>

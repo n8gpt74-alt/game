@@ -15,8 +15,12 @@ import type {
   СостояниеСобытия,
   ТипДействия,
   ТипМиниИгры,
-  ТоварМагазина
+  ТоварМагазина,
+  Квест,
+  ЛидербордЗапись
 } from "./types";
+
+export type { ЛидербордЗапись };
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE ?? "/api").replace(/\/+$/, "");
 const LOCAL_TOKEN = "локальный-режим";
@@ -132,7 +136,12 @@ const MINI_GAME_CATEGORY_BY_TYPE: Record<ТипМиниИгры, Exclude<Кат�
   ru_letter_sound_pick: "letters",
   ru_first_letter_word: "letters",
   ru_vowel_consonant: "letters",
-  ru_missing_letter: "letters"
+  ru_missing_letter: "letters",
+  memory_pairs: "logic",
+  pixel_pattern: "logic",
+  food_catcher: "reflex",
+  hangman: "logic",
+  tic_tac_toe: "logic"
 };
 
 type ЛокальноеХранилище = {
@@ -228,7 +237,12 @@ function создатьЛокальныйState(): СостояниеПитомц
     energy: 85,
     behavior_state: "Спокойный",
     is_lonely: false,
-    last_tick_at: nowIso()
+    last_tick_at: nowIso(),
+    character_courage: 50,
+    character_friendliness: 50,
+    character_energy: 50,
+    character_curiosity: 50,
+    character_tidiness: 50
   };
 }
 
@@ -1102,6 +1116,14 @@ export function использоватьПредмет(token: string, itemKey: s
   return request<ОтветДействия>("/use-item", token, "POST", { item_key: itemKey });
 }
 
+
+export async function получитьКвесты(token: string): Promise<Квест[]> {
+  return request<Квест[]>("/quests", token);
+}
+
+export async function получитьЛидерборд(token: string, type: "wealth" | "level" = "wealth"): Promise<ЛидербордЗапись[]> {
+  return request<ЛидербордЗапись[]>(`/leaderboard?type=${type}`, token);
+}
 
 export function получитьСерию(token: string): Promise<СостояниеСерии> {
   return request<СостояниеСерии>("/streak", token);

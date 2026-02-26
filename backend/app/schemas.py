@@ -16,7 +16,7 @@ class TelegramAuthResponse(BaseModel):
 class PetStateOut(BaseModel):
     user_id: int
     name: str
-    stage: Literal["baby", "child", "teen", "adult"]
+    stage: Literal["egg", "baby", "child", "teen", "adult", "gold_adult", "dark_adult", "fun_adult", "fire_adult"]
     stage_title: str
     level: int
     xp: int
@@ -32,6 +32,11 @@ class PetStateOut(BaseModel):
     behavior_state: str
     is_lonely: bool
     last_tick_at: datetime
+    character_courage: int
+    character_friendliness: int
+    character_energy: int
+    character_curiosity: int
+    character_tidiness: int
 
 
 class EventLogOut(BaseModel):
@@ -132,6 +137,9 @@ class MinigameResultRequest(BaseModel):
         "ru_first_letter_word",
         "ru_vowel_consonant",
         "ru_missing_letter",
+        "memory_pairs",
+        "pixel_pattern",
+        "food_catcher",
     ]
     score: int = Field(ge=0, le=5)
     elapsed_ms: int = Field(ge=500, le=120000)
@@ -188,8 +196,17 @@ class QuestOut(BaseModel):
     quest_key: str
     title: str
     description: str
-    completed: bool
     steps: list[QuestStepOut]
+    completed: bool
+    claimed: bool
+
+
+class LeaderboardEntryOut(BaseModel):
+    user_id: int
+    name: str
+    level: int
+    coins: int
+    rank: int
 
 
 class QuestClaimRequest(BaseModel):

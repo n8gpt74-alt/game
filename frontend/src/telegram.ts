@@ -14,6 +14,11 @@ interface TelegramWebApp {
   setBackgroundColor?: (color: string) => void;
   viewportHeight?: number;
   viewportStableHeight?: number;
+  HapticFeedback?: {
+    impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+    notificationOccurred: (type: "error" | "success" | "warning") => void;
+    selectionChanged: () => void;
+  };
 }
 
 interface TelegramObject {
@@ -90,4 +95,21 @@ export function initTelegramMiniApp(title: string): void {
   app?.setBackgroundColor?.("bg_color");
   syncTelegramViewportHeightVar();
   document.title = title;
+}
+
+// --- HAPTIC FEEDBACK HELPERS ---
+
+export function playHapticImpact(style: "light" | "medium" | "heavy" | "rigid" | "soft" = "light"): void {
+  const app = window.Telegram?.WebApp;
+  app?.HapticFeedback?.impactOccurred(style);
+}
+
+export function playHapticNotification(type: "error" | "success" | "warning"): void {
+  const app = window.Telegram?.WebApp;
+  app?.HapticFeedback?.notificationOccurred(type);
+}
+
+export function playHapticSelection(): void {
+  const app = window.Telegram?.WebApp;
+  app?.HapticFeedback?.selectionChanged();
 }

@@ -17,7 +17,9 @@ import {
   получитьКаталогМагазина,
   получитьСерию,
   получитьСостояние,
-  гидратироватьЛокальныйFallback
+  гидратироватьЛокальныйFallback,
+  получитьЛидерборд,
+  type ЛидербордЗапись
 } from "./api";
 import { ActionDock } from "./components/ActionDock";
 import { FxOverlay, type FxName, type FxTrigger } from "./components/FxOverlay";
@@ -36,7 +38,10 @@ import {
   getTelegramUserId,
   getTelegramViewportHeight,
   initTelegramMiniApp,
-  syncTelegramViewportHeightVar
+  syncTelegramViewportHeightVar,
+  playHapticImpact,
+  playHapticNotification,
+  playHapticSelection
 } from "./telegram";
 import type {
   КаталогМагазина,
@@ -68,7 +73,7 @@ const ACTION_COOLDOWN_MS = {
   mini: 60_000
 } as const;
 
-type Панель = "нет" | "задания" | "магазин" | "события" | "достижения";
+type Панель = "нет" | "задания" | "магазин" | "события" | "достижения" | "профиль" | "топ";
 
 function stageLabel(stageTitle: string | undefined): string {
   return stageTitle || "Малыш";
@@ -286,6 +291,8 @@ export default function App() {
   const [streak, setStreak] = useState<СостояниеСерии | null>(null);
   const [activeEvent, setActiveEvent] = useState<СостояниеСобытия | null>(null);
   const [achievements, setAchievements] = useState<СостояниеДостижения[]>([]);
+  const [leaderboard, setLeaderboard] = useState<ЛидербордЗапись[]>([]);
+  const [leaderboardType, setLeaderboardType] = useState<"wealth" | "level">("wealth");
 
   const [equippedItems, setEquippedItems] = useState<string[]>([]);
   const [isOffline, setIsOffline] = useState<boolean>(!window.navigator.onLine);
@@ -296,6 +303,7 @@ export default function App() {
   const [activeAction, setActiveAction] = useState<ТипДействия | null>(null);
   const [fxTrigger, setFxTrigger] = useState<FxTrigger | null>(null);
   const [showMiniGamePicker, setShowMiniGamePicker] = useState(false);
+  const [showLoginBonusModal, setShowLoginBonusModal] = useState(false);
   const [showMathMiniGames, setShowMathMiniGames] = useState(false);
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectedAction, setSelectedAction] = useState<ТипДействия | null>(null);
@@ -311,6 +319,14 @@ export default function App() {
   useEffect(() => {
     setStorageUserId(resolveStorageUserId(String(userIdDev)));
   }, [userIdDev]);
+
+  useEffect(() => {
+    if (panel === "топ" && token) {
+      получитьЛидерборд(token, leaderboardType)
+        .then(setLeaderboard)
+        .catch(() => setToast("Ошибка загрузки лидерборда"));
+    }
+  }, [panel, leaderboardType, token]);
 
   const washCooldownSec = useMemo(
     () => cooldownSeconds(cooldowns.washUntil, cooldownNowMs),
@@ -330,8 +346,8 @@ export default function App() {
   }, [busy]);
 
   useEffect(() => {
-    uiOverlayRef.current = showMiniGamePicker || showMathMiniGames || panel !== "нет";
-  }, [showMiniGamePicker, showMathMiniGames, panel]);
+    uiOverlayRef.current = showMiniGamePicker || showMathMiniGames || showLoginBonusModal || panel !== "нет";
+  }, [showMiniGamePicker, showMathMiniGames, showLoginBonusModal, panel]);
 
   useEffect(() => {
     if (!storageUserId) return;
@@ -479,6 +495,7 @@ export default function App() {
   };
 
   const показатьОшибку = (text: string) => {
+    playHapticNotification("error");
     setError(text);
   };
 
@@ -498,8 +515,9 @@ export default function App() {
     const bootstrap = async () => {
       try {
         initTelegramMiniApp(PET_TITLE);
-        const initData = getTelegramInitData();
-        const safeInitData = initData || `dev_user_id=${userIdDev}`;
+        // The getTelegramInitData can return an empty string not undefined
+        const rawInitData = getTelegramInitData();
+        const safeInitData = rawInitData ? rawInitData : `dev_user_id=${userIdDev}`;
         const jwt = await авторизацияТелеграм(safeInitData);
         if (active) {
           setStorageUserId(resolveStorageUserId(String(userIdDev)));
@@ -579,6 +597,7 @@ export default function App() {
               nextState = применитьСостояниеСервера(loginBonusResult.state);
               nextHistory = [loginBonusResult.event, ...nextHistory].slice(0, 20);
               nextDaily = loginBonusResult.daily;
+              setShowLoginBonusModal(true);
 
               const [streakAfterBonus, achievementsAfterBonus] = await Promise.all([
                 получитьСерию(token),
@@ -703,9 +722,31 @@ export default function App() {
             playFx("hornGlow", pushFx);
             показатьТост(`${PET.species} ${PET.name} скучает`);
           } else {
-            const микродействия: ТипДействия[] = ["chat", "play", "wash"];
-            const next = микродействия[Math.floor(Math.random() * микродействия.length)];
-            await unicornRef.current.playAction(next);
+            const s = stateRef.current;
+            if (s) {
+              const needs = [
+                { action: "feed", stat: s.hunger },
+                { action: "sleep", stat: s.energy },
+                { action: "wash", stat: s.hygiene },
+                { action: "play", stat: s.happiness },
+                { action: "heal", stat: s.health }
+              ] as const;
+              
+              const sortedNeeds = [...needs].sort((a, b) => a.stat - b.stat);
+              const lowest = sortedNeeds[0];
+              
+              if (lowest.stat < 45) {
+                 await unicornRef.current.playAction(lowest.action as ТипДействия);
+              } else {
+                 const микродействия: ТипДействия[] = ["chat", "play", "wash"];
+                 const next = микродействия[Math.floor(Math.random() * микродействия.length)];
+                 await unicornRef.current.playAction(next);
+              }
+            } else {
+              const микродействия: ТипДействия[] = ["chat", "play", "wash"];
+              const next = микродействия[Math.floor(Math.random() * микродействия.length)];
+              await unicornRef.current.playAction(next);
+            }
           }
         }
         loop();
@@ -814,6 +855,8 @@ export default function App() {
       return;
     }
     
+    playHapticSelection();
+    
     // Специальная обработка для сна
     if (action === "sleep") {
       await handleSleep();
@@ -885,6 +928,8 @@ export default function App() {
   
   const handleUseItem = async (itemKey: string) => {
     if (!token || busy) return;
+    
+    playHapticSelection();
     
     // Сохраняем действие локально, чтобы не потерять при следующем вызове
     const currentAction = selectedAction;
@@ -1043,9 +1088,13 @@ export default function App() {
     setError("");
     try {
       const prev = stateRef.current;
-      const result = await отправитьРезультатМиниИгры(token, { ...payload, source: "math" });
+      // Передаём payload как есть — source уже правильно выставлен в MiniGamesScreen
+      const result = await отправитьРезультатМиниИгры(token, payload);
       const normalized = применитьСостояниеСервера(result.state);
-      const withRecovery = применитьЛокальноеВосстановлениеЭнергии(prev, normalized, payload.score, result);
+      const isMathSource = payload.source === "math";
+      const withRecovery = isMathSource
+        ? применитьЛокальноеВосстановлениеЭнергии(prev, normalized, payload.score, result)
+        : normalized;
       const рост = проверитьПовышениеУровня(prev, withRecovery);
       setState(withRecovery);
       setHistory((old) => [result.event, ...old].slice(0, 20));
@@ -1056,7 +1105,7 @@ export default function App() {
       запуститьАнимациюПредмета("reward_minigame_medal", 2200);
       проигратьЗвук("успех");
       показатьТост(`Награда: +${result.reward.xp} опыта, +${result.reward.coins} монет`);
-      if (!естьСерверноеВосстановлениеЭнергии(result)) {
+      if (isMathSource && !естьСерверноеВосстановлениеЭнергии(result)) {
         const recovery = payload.score >= 3 ? 12 : 6;
         показатьТост(`Энергия восстановлена: +${recovery}`);
       }
@@ -1238,6 +1287,27 @@ export default function App() {
   const warning = useMemo(() => мягкоеПредупреждение(state), [state]);
   const dragonMood = useMemo(() => настроениеДля3D(state), [state]);
   const activeRoomTheme = useMemo(() => equippedItems.find((key) => key.startsWith("theme_")) ?? null, [equippedItems]);
+
+  // Time of day for scene background
+  const [timeOfDay, setTimeOfDay] = useState<"dawn" | "day" | "sunset" | "night">(() => {
+    const h = new Date().getHours();
+    if (h >= 6 && h < 9) return "dawn";
+    if (h >= 9 && h < 17) return "day";
+    if (h >= 17 && h < 21) return "sunset";
+    return "night";
+  });
+
+  useEffect(() => {
+    const updateTime = () => {
+      const h = new Date().getHours();
+      if (h >= 6 && h < 9) setTimeOfDay("dawn");
+      else if (h >= 9 && h < 17) setTimeOfDay("day");
+      else if (h >= 17 && h < 21) setTimeOfDay("sunset");
+      else setTimeOfDay("night");
+    };
+    const interval = window.setInterval(updateTime, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
   const inventoryMap = useMemo(() => {
     return inventory.reduce<Record<string, number>>((acc, item) => {
       acc[item.item_key] = (acc[item.item_key] ?? 0) + item.quantity;
@@ -1287,13 +1357,30 @@ export default function App() {
               <span>🏅 Уровень</span>
               <strong>{state?.level ?? 1}</strong>
             </article>
+            {(streak?.current ?? 0) > 0 && (
+              <article className="resource-chip streak-chip">
+                <span>🔥 Серия</span>
+                <strong>{streak?.current ?? 0} дн.</strong>
+              </article>
+            )}
           </section>
 
           <TopStats state={state} />
 
           <section className="meta-line">
             <div className="pet-mood">
-              Состояние: {state?.behavior_state ?? "Спокойный"}  {PET.name}
+              <span className="mood-emoji">
+                {state?.behavior_state === "Радостный" ? "😄"
+                  : state?.behavior_state === "Голодный" ? "😋"
+                  : state?.behavior_state === "Уставший" ? "😴"
+                  : state?.behavior_state === "Грязный" ? "🤧"
+                  : state?.behavior_state === "Больной" ? "🤒"
+                  : state?.behavior_state === "Игривый" ? "🎮"
+                  : state?.behavior_state === "Любопытный" ? "🧐"
+                  : state?.behavior_state === "Грустный" ? "😢"
+                  : "😊"}
+              </span>
+              {state?.behavior_state ?? "Спокойный"}
             </div>
             <div className="meta-actions">
               <button type="button" className="meta-btn" onClick={() => setPanel(panel === "задания" ? "нет" : "задания")}>
@@ -1308,12 +1395,17 @@ export default function App() {
               <button type="button" className="meta-btn" onClick={() => setPanel(panel === "достижения" ? "нет" : "достижения")}>
                 Достижения {hasAchievementReward ? "•" : ""}
               </button>
-
+              <button type="button" className="meta-btn" onClick={() => setPanel(panel === "профиль" ? "нет" : "профиль")}>
+                Профиль
+              </button>
+              <button type="button" className="meta-btn" onClick={() => setPanel(panel === "топ" ? "нет" : "топ")}>
+                Топ
+              </button>
             </div>
           </section>
         </header>
 
-        <section className="scene-wrap">
+        <section className="scene-wrap" data-time={timeOfDay}>
           <Unicorn3D
             ref={unicornRef}
             stage={state?.stage ?? "baby"}
@@ -1563,6 +1655,83 @@ export default function App() {
         </div>
       )}
 
+      {panel === "профиль" && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true">
+          <div className="sheet-card">
+            <header className="sheet-head">
+               <h3>Характер</h3>
+               <button type="button" onClick={() => setPanel("нет")}>
+                 Закрыть
+               </button>
+            </header>
+            
+            <div className="profile-stats">
+               <div className="stat-row">
+                 <span>⭐ Смелость</span>
+                 <div className="stat-bar"><i style={{width: `${state?.character_courage ?? 50}%`, background: "linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)"}}></i></div>
+                 <strong>{state?.character_courage ?? 50}</strong>
+               </div>
+               <div className="stat-row">
+                 <span>💖 Дружелюбие</span>
+                 <div className="stat-bar"><i style={{width: `${state?.character_friendliness ?? 50}%`, background: "linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%)"}}></i></div>
+                 <strong>{state?.character_friendliness ?? 50}</strong>
+               </div>
+               <div className="stat-row">
+                 <span>⚡ Энергичность</span>
+                 <div className="stat-bar"><i style={{width: `${state?.character_energy ?? 50}%`, background: "linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)"}}></i></div>
+                 <strong>{state?.character_energy ?? 50}</strong>
+               </div>
+               <div className="stat-row">
+                 <span>🔍 Любопытство</span>
+                 <div className="stat-bar"><i style={{width: `${state?.character_curiosity ?? 50}%`, background: "linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)"}}></i></div>
+                 <strong>{state?.character_curiosity ?? 50}</strong>
+               </div>
+               <div className="stat-row">
+                 <span>🧼 Аккуратность</span>
+                 <div className="stat-bar"><i style={{width: `${state?.character_tidiness ?? 50}%`, background: "linear-gradient(120deg, #fccb90 0%, #d57eeb 100%)"}}></i></div>
+                 <strong>{state?.character_tidiness ?? 50}</strong>
+               </div>
+            </div>
+            <p className="sheet-sub" style={{marginTop: '16px'}}>
+              Действия формируют характер. На 21-м уровне питомец эволюционирует в новую форму в зависимости от того, как вы его воспитывали!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {panel === "топ" && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true">
+          <div className="sheet-card">
+            <header className="sheet-head">
+              <h3>Топ Игроков</h3>
+              <button type="button" onClick={() => setPanel("нет")}>
+                Закрыть
+              </button>
+            </header>
+            
+            <div className="leaderboard-tabs" style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+               <button type="button" className={leaderboardType === "wealth" ? "active" : ""} onClick={() => setLeaderboardType("wealth")} style={{flex: 1, padding: "8px", borderRadius: "8px", background: leaderboardType === "wealth" ? "#6c5ce7" : "#dfe4ea", color: leaderboardType === "wealth" ? "#fff" : "#2d3436"}}>Богатство 💰</button>
+               <button type="button" className={leaderboardType === "level" ? "active" : ""} onClick={() => setLeaderboardType("level")} style={{flex: 1, padding: "8px", borderRadius: "8px", background: leaderboardType === "level" ? "#6c5ce7" : "#dfe4ea", color: leaderboardType === "level" ? "#fff" : "#2d3436"}}>Опыт 🏅</button>
+            </div>
+            
+            <div className="leaderboard-list" style={{ maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+               {leaderboard.map((entry) => (
+                 <div key={entry.user_id} className="leaderboard-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                     <strong style={{ fontSize: '18px', color: entry.rank <= 3 ? '#e1b12c' : '#b2bec3' }}>#{entry.rank}</strong>
+                     <span style={{ fontWeight: 500 }}>{entry.name || 'Игрок ' + entry.user_id}</span>
+                   </div>
+                   <div style={{ display: 'flex', gap: '16px', textAlign: 'right', alignItems: 'center' }}>
+                     <span style={{color: '#6c5ce7', fontWeight: 'bold'}}>Ур. {entry.level}</span>
+                     <span style={{color: '#e1b12c', fontWeight: 'bold'}}>{entry.coins} 💰</span>
+                   </div>
+                 </div>
+               ))}
+               {leaderboard.length === 0 && <p className="sheet-sub">Загрузка...</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showMiniGamePicker && (
         <div className="sheet-overlay" role="dialog" aria-modal="true">
@@ -1610,6 +1779,35 @@ export default function App() {
             setSelectedAction(null);
           }}
         />
+      )}
+
+      {showLoginBonusModal && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true" style={{zIndex: 100, alignItems: 'center'}}>
+          <div className="sheet-card" style={{textAlign: 'center', animation: 'dragonResultPop 0.4s ease'}}>
+            <div style={{fontSize: '64px', marginBottom: '8px'}}>🎁</div>
+            <h2 style={{margin: '0 0 12px', color: '#30476f'}}>С возвращением!</h2>
+            <p className="sheet-sub" style={{fontSize: '16px'}}>Ваш ежедневный бонус получен:</p>
+            <div style={{fontSize: '32px', fontWeight: 800, color: '#ffb54a', margin: '16px 0'}}>
+              +500 Монет
+            </div>
+            <p className="sheet-sub">Ждем вас завтра за новой наградой!</p>
+            <button 
+              type="button" 
+              style={{
+                background: 'var(--primary)', color: '#fff', border: 'none', 
+                borderRadius: '12px', padding: '12px 24px', fontSize: '16px', 
+                fontWeight: 700, width: '100%', marginTop: '12px'
+              }}
+              onClick={() => {
+                setShowLoginBonusModal(false);
+                playFx("sparkles", pushFx);
+                проигратьЗвук("успех");
+              }}
+            >
+              Забрать
+            </button>
+          </div>
+        </div>
       )}
 
       {error && <div className="toast error">{error}</div>}

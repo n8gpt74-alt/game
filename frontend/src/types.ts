@@ -1,4 +1,4 @@
-export type СтадияПитомца = "baby" | "child" | "teen" | "adult";
+export type СтадияПитомца = "egg" | "baby" | "child" | "teen" | "adult" | "gold_adult" | "dark_adult" | "fun_adult" | "fire_adult";
 
 export type ТипДействия = "feed" | "wash" | "play" | "heal" | "chat" | "sleep" | "clean";
 
@@ -32,6 +32,11 @@ export interface СостояниеПитомца {
   behavior_state: СостояниеAI | string;
   is_lonely: boolean;
   last_tick_at: string;
+  character_courage: number;
+  character_friendliness: number;
+  character_energy: number;
+  character_curiosity: number;
+  character_tidiness: number;
 }
 
 export interface ЗаписьСобытия {
@@ -89,9 +94,14 @@ export type ТипМиниИгры =
   | "ru_letter_sound_pick"
   | "ru_first_letter_word"
   | "ru_vowel_consonant"
-  | "ru_missing_letter";
+  | "ru_missing_letter"
+  | "memory_pairs"
+  | "pixel_pattern"
+  | "food_catcher"
+  | "hangman"
+  | "tic_tac_toe";
 
-export type КатегорияМиниИгры = "math" | "letters" | "3d";
+export type КатегорияМиниИгры = "math" | "letters" | "logic" | "reflex" | "3d";
 
 export interface ЗапросРезультатаМиниИгры {
   game_type: ТипМиниИгры;
@@ -166,3 +176,32 @@ export interface СостояниеДостижения {
   completed: boolean;
   claimed: boolean;
 }
+
+export interface ШагКвеста {
+  index: number;
+  description: string;
+  target: number;
+  progress: number;
+  reward_coins: number;
+  reward_xp: number;
+  completed: boolean;
+  claimed: boolean;
+}
+
+export interface Квест {
+  quest_key: string;
+  title: string;
+  description: string;
+  steps: ШагКвеста[];
+  completed: boolean;
+  claimed: boolean;
+}
+
+export interface ЛидербордЗапись {
+  user_id: number;
+  name: string;
+  level: number;
+  coins: number;
+  rank: number;
+}
+

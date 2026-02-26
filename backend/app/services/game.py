@@ -20,6 +20,7 @@ from app.services.economy import apply_progress, stage_title, опыт_до_сл
 from app.services.pet_ai import is_absent_more_than_24h, определить_состояние_питомца
 from app.services.shop import CATALOG, find_item, price_for_level
 from app.services.simulation import ActionResult, apply_action, apply_time_decay
+from app.services.random_events import trigger_random_event
 from app.services.gamification import (
     achievement_reward,
     add_achievement_progress,
@@ -85,6 +86,11 @@ MINIGAME_CATEGORY_BY_TYPE = {
     "ru_first_letter_word": "letters",
     "ru_vowel_consonant": "letters",
     "ru_missing_letter": "letters",
+    "memory_pairs": "logic",
+    "pixel_pattern": "logic",
+    "hangman": "logic",
+    "tic_tac_toe": "logic",
+    "food_catcher": "reflex",
 }
 
 
@@ -238,6 +244,10 @@ def _apply_progress_for_pet(
         base_coins=base_coins,
         base_intelligence=base_intelligence,
         base_crystals=base_crystals,
+        courage=pet.character_courage,
+        friendliness=pet.character_friendliness,
+        energy=pet.character_energy,
+        tidiness=pet.character_tidiness,
     )
     pet.xp = next_xp
     pet.level = next_level
@@ -290,6 +300,11 @@ def serialize_pet_state(pet: PetState) -> dict[str, Any]:
         "behavior_state": pet.behavior_state,
         "is_lonely": lonely,
         "last_tick_at": pet.last_tick_at,
+        "character_courage": pet.character_courage,
+        "character_friendliness": pet.character_friendliness,
+        "character_energy": pet.character_energy,
+        "character_curiosity": pet.character_curiosity,
+        "character_tidiness": pet.character_tidiness,
     }
 
 
@@ -391,11 +406,15 @@ def execute_action(db: Session, pet: PetState, action: str) -> ActionExecution:
         _apply_achievement_delta(db, pet.user_id, "feed_count_25", 1, notifications)
     if action == "play":
         _apply_achievement_delta(db, pet.user_id, "play_count_25", 1, notifications)
+    if action == "wash":
+        _apply_achievement_delta(db, pet.user_id, "neat_freak_50", 1, notifications)
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
     notifications.extend(apply_quest_metric(db, pet.user_id, f"action:{action}", 1))
     if event_points:
         notifications.extend(apply_quest_metric(db, pet.user_id, "event_points", event_points))
 
+    # СЛУЧАЙНЫЕ СОБЫТИЯ
+    trigger_random_event(pet, action, notifications)
 
     db.add(pet)
     db.commit()
@@ -708,7 +727,15 @@ def claim_daily_chest_for_pet(db: Session, pet: PetState) -> DailyExecution | No
     grant = claim_daily_chest(progress)
     if grant is None:
         return None
-    return _apply_daily_grant(db, pet, progress, grant, action_name="сундук_дня")
+        
+    extra_notifications = []
+    update = add_event_points(db, pet.user_id, 10) # 10 points for chest
+    if update:
+        extra_notifications.append("Получено 10 очков события!")
+        if update.completed_now:
+            extra_notifications.append("Событие завершено! Заберите награду в разделе «События»")
+    
+    return _apply_daily_grant(db, pet, progress, grant, action_name="сундук_дня", extra_notifications=extra_notifications)
 
 
 def _apply_daily_grant(
@@ -786,6 +813,10 @@ def buy_shop_item(db: Session, pet: PetState, item_key: str) -> ShopExecution:
     _update_behavior_state(pet)
 
     apply_quest_metric(db, pet.user_id, "shop_buy", 1)
+    
+    notifications: list[str] = []
+    _apply_achievement_delta(db, pet.user_id, "shopaholic_20", 1, notifications)
+
     db.add(pet)
     db.commit()
     db.refresh(pet)
@@ -878,6 +909,13 @@ def use_item(db: Session, pet: PetState, item_key: str) -> ActionExecution:
         _apply_achievement_delta(db, pet.user_id, "feed_count_25", 1, notifications)
     if mapped_action == "play":
         _apply_achievement_delta(db, pet.user_id, "play_count_25", 1, notifications)
+    if mapped_action == "wash":
+        _apply_achievement_delta(db, pet.user_id, "neat_freak_50", 1, notifications)
+    
+    # Специфично для сладостей
+    if item_key in ["food_candy", "food_icecream", "food_cake"]:
+        _apply_achievement_delta(db, pet.user_id, "sweet_tooth_10", 1, notifications)
+        
     _apply_achievement_delta(db, pet.user_id, "coins_earned_1000", reward.coins, notifications)
     notifications.extend(apply_quest_metric(db, pet.user_id, "use_item", 1))
     notifications.extend(apply_quest_metric(db, pet.user_id, f"action:{mapped_action}", 1))

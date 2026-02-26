@@ -18,22 +18,43 @@ def опыт_до_следующего_уровня(level: int) -> int:
     return int(math.ceil(50 * (level**1.4)))
 
 
-def stage_by_level(level: int) -> str:
+def stage_by_level(level: int, current_stage: str = "baby", courage: int = 50, friendliness: int = 50, energy: int = 50, tidiness: int = 50) -> str:
     if level <= 5:
         return "baby"
     if level <= 10:
         return "child"
     if level <= 20:
         return "teen"
+    
+    # Взрослая стадия (21+)
+    # Если дракон уже имеет "взрослую" ветку, мы не меняем ее обратно
+    adult_stages = ("gold_adult", "dark_adult", "fun_adult", "fire_adult", "adult")
+    if current_stage in adult_stages:
+        return current_stage
+
+    if friendliness >= 75:
+        return "gold_adult"
+    if tidiness <= 25:
+        return "dark_adult"
+    if energy >= 75:
+        return "fun_adult"
+    if courage >= 75:
+        return "fire_adult"
+        
     return "adult"
 
 
 def stage_title(stage: str) -> str:
     mapping = {
+        "egg": "Яйцо",
         "baby": "Малыш",
         "child": "Ребёнок",
         "teen": "Подросток",
-        "adult": "Взрослый",
+        "adult": "Взрослый (Обычный)",
+        "gold_adult": "Взрослый (Благородный)",
+        "dark_adult": "Взрослый (Дикий)",
+        "fun_adult": "Взрослый (Веселый)",
+        "fire_adult": "Взрослый (Огненный)",
     }
     return mapping.get(stage, "Малыш")
 
@@ -52,6 +73,10 @@ def apply_progress(
     base_coins: int,
     base_intelligence: int = 0,
     base_crystals: int = 0,
+    courage: int = 50,
+    friendliness: int = 50,
+    energy: int = 50,
+    tidiness: int = 50,
 ) -> tuple[int, int, str, int, int, ProgressResult]:
     gained_xp = int(round(base_xp * xp_multiplier(intelligence)))
     gained_coins = max(0, base_coins)
@@ -69,7 +94,14 @@ def apply_progress(
         levels_gained.append(next_level)
 
     previous_stage = stage
-    new_stage = stage_by_level(next_level)
+    new_stage = stage_by_level(
+        next_level, 
+        current_stage=previous_stage, 
+        courage=courage, 
+        friendliness=friendliness, 
+        energy=energy, 
+        tidiness=tidiness
+    )
     changed = previous_stage != new_stage
 
     return (

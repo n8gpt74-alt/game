@@ -107,6 +107,36 @@ ACHIEVEMENT_DEFINITIONS: dict[str, dict[str, int | str]] = {
         "reward_coins": 700,
         "reward_xp": 250,
     },
+    
+    # Новые достижения для магазина и разнообразия
+    "sweet_tooth_10": {
+        "title": "Сладкоежка",
+        "description": "Покормить сладостями 10 раз",
+        "target": 10,
+        "reward_coins": 150,
+        "reward_xp": 70,
+    },
+    "neat_freak_50": {
+        "title": "Чистюля",
+        "description": "Помыть дракона 50 раз",
+        "target": 50,
+        "reward_coins": 300,
+        "reward_xp": 120,
+    },
+    "rich_5000": {
+        "title": "Богач",
+        "description": "Накопить суммарно 5000 монет",
+        "target": 5000,
+        "reward_coins": 1000,
+        "reward_xp": 400,
+    },
+    "shopaholic_20": {
+        "title": "Шопоголик",
+        "description": "Купить 20 предметов в магазине",
+        "target": 20,
+        "reward_coins": 400,
+        "reward_xp": 200,
+    },
 }
 
 

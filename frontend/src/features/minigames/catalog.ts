@@ -9,7 +9,7 @@ export type ОписаниеМиниИгры = {
   title: string;
   subtitle: string;
   icon: string;
-  generateQuestion: () => MiniGameQuestion;
+  generateQuestion?: () => MiniGameQuestion;
 };
 
 export const КАТЕГОРИИ_МИНИ_ИГР: Array<{
@@ -18,7 +18,9 @@ export const КАТЕГОРИИ_МИНИ_ИГР: Array<{
   subtitle: string;
 }> = [
   { id: "math", title: "Математика", subtitle: "Счёт, сравнение и задачи" },
-  { id: "letters", title: "Буквы", subtitle: "Азбука и произношение" }
+  { id: "letters", title: "Буквы", subtitle: "Азбука и произношение" },
+  { id: "logic", title: "Логика", subtitle: "Память, узоры и мышление" },
+  { id: "reflex", title: "Реакция", subtitle: "Скорость и координация" }
 ];
 
 export const КАТАЛОГ_МИНИ_ИГР: ОписаниеМиниИгры[] = [
@@ -33,7 +35,12 @@ export const КАТАЛОГ_МИНИ_ИГР: ОписаниеМиниИгры[] 
   { type: "ru_letter_sound_pick", category: "letters", title: "Буква на слух", subtitle: "Выбери букву по озвучке", icon: "🔊", generateQuestion: MINI_GAME_GENERATORS.ru_letter_sound_pick },
   { type: "ru_first_letter_word", category: "letters", title: "Первая буква", subtitle: "Определи первую букву слова", icon: "🔠", generateQuestion: MINI_GAME_GENERATORS.ru_first_letter_word },
   { type: "ru_vowel_consonant", category: "letters", title: "Гласная или согласная", subtitle: "К какому типу относится буква?", icon: "🗣️", generateQuestion: MINI_GAME_GENERATORS.ru_vowel_consonant },
-  { type: "ru_missing_letter", category: "letters", title: "Пропущенная буква", subtitle: "Вставь недостающую букву", icon: "✏️", generateQuestion: MINI_GAME_GENERATORS.ru_missing_letter }
+  { type: "ru_missing_letter", category: "letters", title: "Пропущенная буква", subtitle: "Вставь недостающую букву", icon: "✏️", generateQuestion: MINI_GAME_GENERATORS.ru_missing_letter },
+  { type: "memory_pairs", category: "logic", title: "Парочки (Мемори)", subtitle: "Найди парные карточки", icon: "🃏" },
+  { type: "pixel_pattern", category: "logic", title: "Собери узор", subtitle: "Воспроизведи рисунок по памяти", icon: "🎨" },
+  { type: "hangman", category: "logic", title: "Виселица", subtitle: "Угадай слово по буквам", icon: "🪢" },
+  { type: "tic_tac_toe", category: "logic", title: "Крестики-нолики", subtitle: "Сыграй против бота", icon: "⭕" },
+  { type: "food_catcher", category: "reflex", title: "Ловец еды", subtitle: "Лови еду, избегай бомб", icon: "🍎" }
 ];
 
 export function игрыПоКатегории(category: КатегорияКаталогаМиниИгры): ОписаниеМиниИгры[] {

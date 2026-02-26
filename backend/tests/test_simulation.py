@@ -12,6 +12,11 @@ class DummyPet:
     health: int
     energy: int
     last_tick_at: datetime
+    character_courage: int = 50
+    character_friendliness: int = 50
+    character_energy: int = 50
+    character_curiosity: int = 50
+    character_tidiness: int = 50
 
 
 def test_apply_time_decay_respects_cap_and_clamp() -> None:

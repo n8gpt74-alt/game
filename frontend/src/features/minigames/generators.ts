@@ -242,7 +242,7 @@ function makeRuMissingLetterQuestion(): MiniGameQuestion {
   };
 }
 
-export const MINI_GAME_GENERATORS: Record<ТипМиниИгры, () => MiniGameQuestion> = {
+export const MINI_GAME_GENERATORS: Record<Exclude<ТипМиниИгры, "memory_pairs" | "pixel_pattern" | "food_catcher" | "hangman" | "tic_tac_toe">, () => MiniGameQuestion> = {
   count_2_4: () => makeCountQuestion(2, 4),
   sum_4_6: makeSumQuestion,
   compare: makeCompareQuestion,
