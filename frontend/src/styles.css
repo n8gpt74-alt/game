@@ -29,17 +29,32 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
+  padding: 0;
+  width: 100%;
   height: 100%;
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
   font-family:
     "Segoe UI Variable Display", "Trebuchet MS", "Verdana", sans-serif;
   color: var(--text-main);
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -49,9 +64,13 @@ body {
 
 .app-shell {
   position: relative;
-  min-height: var(--app-height, 100dvh);
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  max-height: var(--app-height, 100dvh);
   overflow: hidden;
-  padding: calc(10px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));
+  padding: calc(6px + var(--safe-top)) 10px calc(8px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
 }
 
 .room-bg {
@@ -81,17 +100,19 @@ body {
 .mobile-layout {
   position: relative;
   z-index: 2;
-  display: grid;
-  gap: 10px;
-  min-height: calc(
-    var(--app-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 24px
-  );
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .top-wrap {
   display: grid;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .pet-title {
@@ -231,8 +252,8 @@ body {
 
 .scene-wrap {
   position: relative;
-  border-radius: 28px;
-  border: 4px solid var(--panel-border);
+  border-radius: 20px;
+  border: 3px solid var(--panel-border);
   background:
     /* Sun / Glow */
     radial-gradient(
@@ -265,7 +286,8 @@ body {
   overflow: hidden;
   min-height: 0;
   width: 100%;
-  height: clamp(320px, 55vh, 720px);
+  flex: 1;
+  min-height: 120px;
   transition: background 1.5s ease;
 }
 
@@ -544,19 +566,20 @@ body {
 
 .bottom-wrap {
   display: grid;
+  flex-shrink: 0;
 }
 
 .action-dock {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   background: var(--panel-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
-  border-radius: 20px;
-  padding: 10px;
+  border-radius: 16px;
+  padding: 8px;
   box-shadow: var(--shadow);
 }
 
@@ -564,7 +587,8 @@ body {
   appearance: none;
   border: none;
   border-radius: 999px;
-  min-height: 72px;
+  min-height: 56px;
+  padding: 6px 2px;
   background:
     radial-gradient(
       circle at 50% 0%,
@@ -580,16 +604,16 @@ body {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 3px;
+  gap: 2px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.05;
   touch-action: manipulation;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .action-btn .emoji {
-  font-size: 24px;
+  font-size: 20px;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
@@ -635,26 +659,30 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .pet-mood {
-  flex: 1;
-  min-height: 46px;
-  border-radius: 16px;
+  flex: 0 1 auto;
+  min-height: 32px;
+  border-radius: 12px;
   border: 1px solid var(--panel-border);
   background: var(--panel-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 8px 14px;
-  font-size: 15px;
+  padding: 6px 10px;
+  font-size: 13px;
   color: var(--text-main);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   animation: moodBreath 4s ease-in-out infinite;
   box-shadow: var(--shadow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @keyframes moodBreath {
@@ -674,18 +702,33 @@ body {
 
 .meta-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 60%;
+}
+
+.meta-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .meta-btn {
   appearance: none;
   border: none;
   border-radius: 999px;
-  padding: 10px 12px;
-  min-height: 38px;
+  padding: 7px 10px;
+  min-height: 32px;
   font-weight: 700;
+  font-size: 11px;
   color: #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
   background: linear-gradient(180deg, #7f95ff, #627bec);
+  touch-action: manipulation;
 }
 
 .low-stat-warning {
@@ -779,9 +822,12 @@ body {
   background: rgba(31, 36, 64, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  padding: calc(10px + env(safe-area-inset-top)) 10px
-    calc(12px + env(safe-area-inset-bottom));
+  padding: calc(8px + env(safe-area-inset-top)) 8px
+    calc(8px + env(safe-area-inset-bottom));
   display: grid;
+  height: var(--app-height, 100dvh);
+  max-height: var(--app-height, 100dvh);
+  overflow: hidden;
   animation: fadeOverlay 0.3s ease-out;
 }
 
@@ -801,7 +847,8 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 24px;
   overflow: auto;
-  padding: 20px;
+  padding: 16px;
+  max-height: calc(var(--app-height, 100dvh) - 40px);
   box-shadow: var(--shadow);
   animation: slideUpCard 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1024,12 +1071,15 @@ body {
   position: fixed;
   inset: 0;
   z-index: 55;
-  padding: calc(10px + env(safe-area-inset-top)) 10px
-    calc(12px + env(safe-area-inset-bottom));
+  padding: calc(8px + env(safe-area-inset-top)) 8px
+    calc(8px + env(safe-area-inset-bottom));
   background: rgba(31, 36, 64, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: grid;
+  height: var(--app-height, 100dvh);
+  max-height: var(--app-height, 100dvh);
+  overflow: hidden;
   animation: fadeOverlay 0.3s ease-out;
 }
 
@@ -1040,7 +1090,8 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 24px;
   overflow: auto;
-  padding: 20px;
+  padding: 16px;
+  max-height: calc(var(--app-height, 100dvh) - 40px);
   box-shadow: var(--shadow);
   animation: slideUpCard 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1320,58 +1371,177 @@ body {
 
 @media (max-width: 430px) {
   .app-shell {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
   }
 
   .resource-strip {
-    gap: 4px;
+    gap: 3px;
   }
 
   .resource-chip {
-    padding: 5px;
+    padding: 4px;
+    border-radius: 12px;
   }
 
   .resource-chip span {
-    font-size: 9px;
+    font-size: 8px;
   }
 
   .resource-chip strong {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .top-stats {
-    gap: 4px;
+    gap: 3px;
   }
 
   .stat-chip {
-    padding: 6px 5px;
+    padding: 5px 4px;
+    border-radius: 12px;
+  }
+
+  .stat-icon {
+    font-size: 12px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+  }
+
+  .stat-value {
+    font-size: 10px;
   }
 
   .action-dock {
-    gap: 6px;
-    padding: 7px;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 14px;
   }
 
   .action-btn {
-    min-height: 60px;
-    font-size: 11px;
+    min-height: 48px;
+    font-size: 10px;
+    border-radius: 14px;
+    padding: 4px 1px;
   }
 
   .action-btn .emoji {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .pet-mood {
-    font-size: 12px;
+    font-size: 11px;
+    padding: 5px 8px;
   }
 
   .meta-btn {
-    padding: 9px 10px;
+    padding: 6px 8px;
+    font-size: 10px;
+    min-height: 28px;
+  }
+
+  .pet-title {
+    padding: 8px 12px;
+    border-radius: 14px;
+  }
+
+  .pet-title strong {
+    font-size: 16px;
+  }
+
+  .pet-title span {
     font-size: 12px;
   }
 
+  .scene-wrap {
+    border-radius: 16px;
+    border-width: 2px;
+  }
+
   .history-strip {
+    display: none;
+  }
+}
+
+/* Very small screens (iPhone SE, Galaxy S5, etc.) */
+@media (max-width: 360px) {
+  .app-shell {
+    padding: calc(4px + var(--safe-top)) 4px calc(4px + var(--safe-bottom));
+  }
+
+  .mobile-layout {
+    gap: 4px;
+  }
+
+  .top-wrap {
+    gap: 3px;
+  }
+
+  .resource-chip {
+    padding: 3px;
+  }
+
+  .resource-chip span {
+    font-size: 7px;
+  }
+
+  .resource-chip strong {
+    font-size: 9px;
+  }
+
+  .stat-chip {
+    padding: 4px 3px;
+  }
+
+  .action-dock {
+    gap: 3px;
+    padding: 5px;
+  }
+
+  .action-btn {
+    min-height: 42px;
+    font-size: 9px;
+    gap: 1px;
+  }
+
+  .action-btn .emoji {
+    font-size: 16px;
+  }
+
+  .meta-actions {
+    max-width: 55%;
+  }
+
+  .meta-btn {
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+}
+
+/* Landscape mode - extra compact */
+@media (max-height: 500px) {
+  .top-wrap {
+    gap: 2px;
+  }
+
+  .resource-strip {
+    display: none;
+  }
+
+  .pet-title {
+    padding: 6px 10px;
+  }
+
+  .action-btn {
+    min-height: 40px;
+  }
+
+  .action-btn .emoji {
+    font-size: 16px;
+  }
+
+  .meta-line {
     display: none;
   }
 }

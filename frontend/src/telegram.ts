@@ -14,6 +14,13 @@ interface TelegramWebApp {
   setBackgroundColor?: (color: string) => void;
   viewportHeight?: number;
   viewportStableHeight?: number;
+  isVerticalSwipesEnabled?: boolean;
+  disableVerticalSwipes?: () => void;
+  enableVerticalSwipes?: () => void;
+  requestFullscreen?: () => void;
+  isFullscreen?: boolean;
+  platform?: string;
+  version?: string;
   HapticFeedback?: {
     impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
     notificationOccurred: (type: "error" | "success" | "warning") => void;
@@ -84,6 +91,28 @@ export function syncTelegramViewportHeightVar(): number {
 
 export function initTelegramMiniApp(title: string): void {
   const app = window.Telegram?.WebApp;
+
+  // Lock body overflow to prevent bounce/scroll in Telegram WebView
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.position = "fixed";
+  document.documentElement.style.width = "100%";
+  document.documentElement.style.height = "100%";
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  document.body.style.height = "100%";
+  document.body.style.overscrollBehavior = "none";
+
+  // Prevent pull-to-refresh / overscroll on touch devices
+  document.addEventListener("touchmove", (e) => {
+    // Allow scrolling inside scrollable containers
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.(".sheet-card, .mini-card, .item-selector, .leaderboard-list, .shop-list, .daily-list")) {
+      return;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
   if (!app) {
     document.title = title;
     syncTelegramViewportHeightVar();
@@ -93,6 +122,23 @@ export function initTelegramMiniApp(title: string): void {
   app?.expand?.();
   app?.setHeaderColor?.("secondary_bg_color");
   app?.setBackgroundColor?.("bg_color");
+
+  // Disable vertical swipes to prevent accidental close (Telegram 7.7+)
+  try {
+    app?.disableVerticalSwipes?.();
+  } catch {
+    // Method not available in older versions
+  }
+
+  // Try fullscreen for better immersion (Telegram 8.0+)
+  try {
+    if (!app?.isFullscreen) {
+      app?.requestFullscreen?.();
+    }
+  } catch {
+    // Fullscreen not supported
+  }
+
   syncTelegramViewportHeightVar();
   document.title = title;
 }
