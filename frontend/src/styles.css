@@ -112,9 +112,12 @@ body,
 }
 
 .top-wrap {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
 }
 
 .pet-title {
@@ -133,6 +136,11 @@ body,
 
 .pet-title strong {
   font-size: clamp(19px, 4.8vw, 24px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .pet-title span {
@@ -173,6 +181,7 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  max-width: 100%;
 }
 
 .resource-chip strong {
@@ -184,6 +193,7 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  max-width: 100%;
 }
 
 .streak-chip {
@@ -251,6 +261,9 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 4px;
 }
 
 .stat-value {
@@ -591,8 +604,11 @@ body,
 }
 
 .bottom-wrap {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
 }
 
 .action-dock {
@@ -607,6 +623,7 @@ body,
   border-radius: 16px;
   padding: 8px;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .action-btn {
@@ -638,10 +655,11 @@ body,
 
 .action-btn span:not(.emoji) {
   width: 100%;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 2px;
+  padding: 0 1px;
 }
 
 .action-btn .emoji {
@@ -1437,6 +1455,7 @@ body,
   .resource-chip {
     padding: 4px;
     border-radius: 12px;
+    gap: 1px;
   }
 
   .resource-chip span {
