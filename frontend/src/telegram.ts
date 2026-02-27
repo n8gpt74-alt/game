@@ -146,7 +146,7 @@ export function initTelegramMiniApp(title: string): void {
 
   // Listen for viewport changes (e.g., keyboard popups or expanding)
   try {
-    app.onEvent("viewportChanged", () => {
+    app.onEvent?.("viewportChanged", () => {
       syncTelegramViewportHeightVar();
     });
   } catch (e) {
