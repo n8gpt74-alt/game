@@ -1,29 +1,29 @@
 :root {
   /* Telegram Theme Variables with Fallbacks */
-  --tg-bg: var(--tg-theme-bg-color, #ffffff);
-  --tg-text: var(--tg-theme-text-color, #23304a);
-  --tg-hint: var(--tg-theme-hint-color, #59708f);
-  --tg-primary: var(--tg-theme-button-color, #6e85ff);
+  --tg-bg: var(--tg-theme-bg-color, #1a1e35);
+  --tg-text: var(--tg-theme-text-color, #ffffff);
+  --tg-hint: var(--tg-theme-hint-color, #a8b8d8);
+  --tg-primary: var(--tg-theme-button-color, #5c7cfa);
   --tg-primary-text: var(--tg-theme-button-text-color, #ffffff);
-  --tg-secondary-bg: var(--tg-theme-secondary-bg-color, #f7f3ff);
+  --tg-secondary-bg: var(--tg-theme-secondary-bg-color, #2b3054);
+  --tg-viewport-stable-height: 100dvh;
 
-  /* Glassmorphism & App Palette */
+  /* Glassmorphism & App Palette (Higher Contrast) */
   --bg-top: var(--tg-bg);
   --bg-mid: var(--tg-bg);
   --bg-floor: var(--tg-secondary-bg);
 
-  /* Use translucent white for glass effect in light mode, adjust dynamically if possible, but keep it premium */
-  --panel-bg: rgba(255, 255, 255, 0.75);
-  --panel-border: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08); /* Soft glass shadow */
+  --panel-bg: rgba(25, 30, 55, 0.85); /* Darker panel for contrast */
+  --panel-border: rgba(255, 255, 255, 0.25);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); /* Soft glass shadow */
 
-  --text-main: var(--tg-text);
-  --text-soft: var(--tg-hint);
+  --text-main: #ffffff;
+  --text-soft: #bac5e3;
   --primary: var(--tg-primary);
   --shadow: 0 12px 30px var(--glass-shadow);
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
-  --app-height: 100dvh;
+  --app-height: var(--tg-viewport-stable-height, 100dvh);
 }
 
 * {
@@ -33,7 +33,8 @@
   user-select: none;
 }
 
-input, textarea {
+input,
+textarea {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -45,7 +46,7 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  height: var(--app-height, 100dvh);
+  height: var(--app-height);
   overflow: hidden;
   position: fixed;
   inset: 0;
@@ -55,18 +56,14 @@ body,
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
-}
-
-body {
   background: var(--tg-bg);
-  transition: background-color 0.3s ease;
 }
 
 .app-shell {
   position: relative;
   width: 100%;
-  height: var(--app-height, 100dvh);
-  max-height: var(--app-height, 100dvh);
+  height: var(--app-height);
+  max-height: var(--app-height);
   overflow: hidden;
   padding: calc(6px + var(--safe-top)) 10px calc(8px + var(--safe-bottom));
   display: flex;
@@ -163,10 +160,14 @@ body {
 .resource-chip span {
   color: var(--text-soft);
   font-size: 10px;
+  font-weight: 700;
 }
 
 .resource-chip strong {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .streak-chip {
@@ -217,16 +218,19 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .stat-icon {
-  font-size: 14px;
+  font-size: 16px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
 }
 
 .stat-label {
   font-size: 10px;
   color: var(--text-soft);
+  font-weight: 700;
+  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -234,20 +238,25 @@ body {
 
 .stat-value {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--text-main);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 .stat-track {
   height: 6px;
   border-radius: 999px;
-  background: #e8effb;
+  background: rgba(0,0,0,0.4);
   overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .stat-track i {
   display: block;
   height: 100%;
   border-radius: inherit;
+  transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4);
 }
 
 .scene-wrap {
@@ -589,27 +598,22 @@ body {
   border-radius: 999px;
   min-height: 56px;
   padding: 6px 2px;
-  background:
-    radial-gradient(
-      circle at 50% 0%,
-      rgba(255, 255, 255, 0.4) 0%,
-      rgba(255, 255, 255, 0) 50%
-    ),
-    var(--tg-primary);
+  background: var(--tg-primary);
   box-shadow:
     inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.1),
-    0 8px 16px rgba(0, 0, 0, 0.08);
+    inset 0 -4px 8px rgba(0, 0, 0, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.3);
   color: var(--tg-primary-text);
   display: grid;
   align-content: center;
   justify-items: center;
   gap: 2px;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 11px;
   line-height: 1.05;
   touch-action: manipulation;
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .action-btn .emoji {
@@ -618,10 +622,16 @@ body {
 }
 
 .action-timer {
-  display: block;
-  font-size: 10px;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.8);
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .action-btn.is-active,
@@ -686,8 +696,13 @@ body {
 }
 
 @keyframes moodBreath {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.01); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.01);
+  }
 }
 
 .pet-mood .mood-emoji {
@@ -696,8 +711,13 @@ body {
 }
 
 @keyframes moodBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 .meta-actions {
@@ -720,15 +740,18 @@ body {
   appearance: none;
   border: none;
   border-radius: 999px;
-  padding: 7px 10px;
-  min-height: 32px;
-  font-weight: 700;
-  font-size: 11px;
+  padding: 7px 12px;
+  min-height: 34px;
+  font-weight: 800;
+  font-size: 12px;
   color: #fff;
   white-space: nowrap;
   flex-shrink: 0;
-  background: linear-gradient(180deg, #7f95ff, #627bec);
+  background: linear-gradient(180deg, #6c88ff, #4a66e6);
   touch-action: manipulation;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .low-stat-warning {
@@ -1397,12 +1420,12 @@ body {
   }
 
   .stat-chip {
-    padding: 5px 4px;
+    padding: 6px 4px;
     border-radius: 12px;
   }
 
   .stat-icon {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .stat-label {
@@ -1410,7 +1433,7 @@ body {
   }
 
   .stat-value {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .action-dock {

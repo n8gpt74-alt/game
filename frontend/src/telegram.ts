@@ -26,6 +26,8 @@ interface TelegramWebApp {
     notificationOccurred: (type: "error" | "success" | "warning") => void;
     selectionChanged: () => void;
   };
+  onEvent?: (eventType: string, eventHandler: () => void) => void;
+  offEvent?: (eventType: string, eventHandler: () => void) => void;
 }
 
 interface TelegramObject {
@@ -141,6 +143,16 @@ export function initTelegramMiniApp(title: string): void {
 
   syncTelegramViewportHeightVar();
   document.title = title;
+
+  // Listen for viewport changes (e.g., keyboard popups or expanding)
+  try {
+    app.onEvent("viewportChanged", () => {
+      syncTelegramViewportHeightVar();
+    });
+  } catch (e) {
+    // Ignore if not supported
+    window.addEventListener("resize", syncTelegramViewportHeightVar);
+  }
 }
 
 // --- HAPTIC FEEDBACK HELPERS ---
